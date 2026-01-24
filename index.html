@@ -40,167 +40,56 @@
 </head>
 <body>
 
-<div id="status-panel">
-    <h3>File Status</h3>
-    <div id="status-list">Waiting for server...</div>
-</div>
+    <div id="status-panel">
+        <h3>File Status</h3>
+        <div id="status-list">Waiting for server...</div>
+    </div>
+    
+    <div id="map"></div>
+    
+    <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+    <script src="https://unpkg.com/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+    
 
-<div id="map"></div>
-
-<script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
-<script src="https://unpkg.com/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
-
-<script>
-    const map = new maplibregl.Map({
-        container: 'map',
-        style: {
-            'version': 8,
-            'sources': {
-                'osm': {
-                    'type': 'raster',
-                    'tiles': ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-                    'tileSize': 256,
-                    'attribution': '&copy; OpenStreetMap Contributors'
-                }
-            },
-            'layers': [
-                {
-                    'id': 'osm-layer',
-                    'type': 'raster',
-                    'source': 'osm',
-                    'minzoom': 0,
-                    'maxzoom': 19
-                }
-            ]
-        },
-        center: [15.6, 49.8],
-        zoom: 7
-    });
-
-    const statusList = document.getElementById('status-list');
-
-    // Helper function to update the UI for a specific file
-    function updateFileStatus(filename, status, type) {
-        // Check if an element for this file already exists
-        let item = document.getElementById(`status-${filename}`);
-        
-        if (!item) {
-            item = document.createElement('div');
-            item.id = `status-${filename}`;
-            item.className = 'file-item';
-            statusList.appendChild(item);
-        }
-
-        // Set the color class based on type
-        let statusClass = 'status-loading';
-        if (type === 'success') statusClass = 'status-ok';
-        if (type === 'error') statusClass = 'status-error';
-
-        item.innerHTML = `
-            <span>${filename}</span>
-            <span class="${statusClass}">${status}</span>
-        `;
-    }
+    <script src="mapStyle.js"></script>
 
 
-    map.on('load', () => {
-        loadFiles();
-
-        
-    });
-
-    async function loadFiles() {
-        statusList.innerHTML = ''; // Clear initial text
-
-        try {
-            const response = await fetch('/api/files');
-            const files = await response.json();
-
-            if (files.length === 0) {
-                statusList.innerHTML = 'No files found in /data';
-                return;
-            }
-
-            console.log("Files to load:", files);
-
-            // Process each file
-            for (const [index, filename] of files.entries()) {
-                loadSingleFile(filename, index);
-            }
-
-        } catch (error) {
-            statusList.innerHTML = `<div class="status-error">API Error: ${error.message}</div>`;
-        }
-    }
-
-    async function loadSingleFile(filename, index) {
-        updateFileStatus(filename, 'Loading...', 'loading');
-        const sourceId = `source-${index}`;
-
-        try {
-            const res = await fetch(`/data/${filename}`);
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    
+    <script>
+        const map = new maplibregl.Map({
+            container: 'map',
+            style: {
+               
+                
+                'version': 8,
+                'sources': {
+                    'osm': {
+                        'type': 'raster',
+                        'tiles': ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+                        'tileSize': 256,
+                        'attribution': '&copy; OpenStreetMap Contributors'
+                    }
+                },
+                'layers': [
+                    {
+                        'id': 'osm-layer',
+                        'type': 'raster',
+                        'source': 'osm',
+                        'minzoom': 0,
+                        'maxzoom': 19
+                    }
+                ]
             
-            let geojsonData = await res.json();
-
-            // Podpora pro TopoJSON
-            if (filename.endsWith('.topojson')) {
-                const keys = Object.keys(geojsonData.objects);
-                if (keys.length > 0) {
-                    geojsonData = topojson.feature(geojsonData, geojsonData.objects[keys[0]]);
-                }
-            }
-
-            // 1. Přidání zdroje dat
-            map.addSource(sourceId, {
-                type: 'geojson',
-                data: geojsonData
-            });
-
-            // 2. Přidání vrstvy pro VÝPLŇ (Polygony) - to je to, co chybělo
-            map.addLayer({
-                'id': `layer-${index}-fill`,
-                'type': 'fill',
-                'source': sourceId,
-                'paint': {
-                    'fill-color': '#3388ff', // Modrá výplň
-                    'fill-opacity': 0.4      // Průhlednost, aby byla vidět mapa pod tím
-                },
-                'filter': ['==', '$type', 'Polygon']
-            });
-
-            // 3. Přidání vrstvy pro OBRYSY (Čáry a hrany polygonů)
-            map.addLayer({
-                'id': `layer-${index}-line`,
-                'type': 'line',
-                'source': sourceId,
-                'paint': {
-                    'line-color': '#ff3333',
-                    'line-width': 2
-                },
-                'filter': ['in', '$type', 'LineString', 'Polygon']
-            });
-
-            // 4. Přidání vrstvy pro BODY (pokud soubor obsahuje jen body)
-            map.addLayer({
-                'id': `layer-${index}-point`,
-                'type': 'circle',
-                'source': sourceId,
-                'paint': {
-                    'circle-radius': 5,
-                    'circle-color': '#ff3333'
-                },
-                'filter': ['==', '$type', 'Point']
-            });
-
-            updateFileStatus(filename, 'Loaded', 'success');
-
-        } catch (err) {
-            console.error(err);
-            updateFileStatus(filename, 'Failed', 'error');
-        }
-    }
-</script>
-
-</body>
+                
+                
+            },
+            center: [15.6, 49.8],
+            zoom: 7
+            
+        });
+    
+    </script>
+    
+    <script src="fileLoader.js"></script>
+    </body>
 </html>
