@@ -5,62 +5,30 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Map File Loader</title>
     <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
-    <style>
-        body { margin: 0; padding: 0; font-family: sans-serif; }
-        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
-
-        /* Styles for the status panel in the top-left corner */
-        #status-panel {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            z-index: 10;
-            background: rgba(255, 255, 255, 0.9);
-            padding: 10px;
-            border-radius: 4px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.2);
-            max-width: 300px;
-            font-size: 13px;
-        }
-        #status-panel h3 {
-            margin: 0 0 5px 0;
-            font-size: 14px;
-            border-bottom: 1px solid #ccc;
-            padding-bottom: 5px;
-        }
-        .file-item {
-            margin-bottom: 4px;
-            display: flex;
-            justify-content: space-between;
-        }
-        .status-loading { color: #d35400; font-weight: bold; }
-        .status-ok { color: #27ae60; font-weight: bold; }
-        .status-error { color: #c0392b; font-weight: bold; }
-    </style>
+    <link href="UI/style.css" rel="stylesheet" />
 </head>
 <body>
 
     <div id="status-panel">
-        <h3>File Status</h3>
+        <h3>Layers</h3>
         <div id="status-list">Waiting for server...</div>
     </div>
     
+
+    /*map innit*/
+
     <div id="map"></div>
     
     <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
     <script src="https://unpkg.com/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
     
+    <script src="UI/mapStyle.js"></script>
+    <script src="UI/popUpMarker.js"></script>
 
-    <script src="mapStyle.js"></script>
-
-
-    
     <script>
         const map = new maplibregl.Map({
             container: 'map',
             style: {
-               
-                
                 'version': 8,
                 'sources': {
                     'osm': {
@@ -79,17 +47,12 @@
                         'maxzoom': 19
                     }
                 ]
-            
-                
-                
             },
             center: [15.6, 49.8],
             zoom: 7
-            
         });
-    
     </script>
     
-    <script src="fileLoader.js"></script>
-    </body>
+    <script src="logic/fileLoader.js"></script>
+</body>
 </html>
