@@ -1,6 +1,3 @@
-
-
-
 /**
  * Defines the visual style for map features.
  * Returns an array of layer configurations for MapLibre GL.
