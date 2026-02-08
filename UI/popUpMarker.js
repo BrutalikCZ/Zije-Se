@@ -1,9 +1,6 @@
-// file: popupConfig.js
+// file: popupMarkers.js
 
-/**
- * Configuration object for Map Popups.
- * Handles styling and HTML content generation.
- */
+
 const PopupConfig = {
     /**
      * CSS styles for the popup table.
@@ -69,5 +66,4 @@ const PopupConfig = {
     }
 };
 
-// Automatically inject styles when this script is loaded
 PopupConfig.injectStyles();

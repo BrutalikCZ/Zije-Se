@@ -1,15 +1,119 @@
 // logic/fileLoader.js
 
-const statusList = document.getElementById('status-list');
+const FileLoader = {
+
+    /**
+     * Start point for "Normal Mode". 
+     * Fetches file list and populates the left-side UI.
+     */
+    init: async function(map) {
+        const statusList = document.getElementById('status-list');
+        if (!statusList) return; 
+
+        statusList.innerHTML = '';
+        
+        try {
+            const response = await fetch('/api/files');
+            const files = await response.json();
+
+            if (files.length === 0) {
+                statusList.innerHTML = 'No files found in /data';
+                return;
+            }
+
+            for (const [index, filename] of files.entries()) {
+                this.loadFile(map, filename, index); 
+            }
+        } catch (error) {
+            statusList.innerHTML = `<div class="status-error">API Error: ${error.message}</div>`;
+        }
+    },
+
+    /**
+     * Universal loader. 
+     * Can be called by 'init' (with uiIndex) or by DebugManager (without uiIndex).
+     */
+    loadFile: async function(map, filename, uiIndex = null) {
+        // Generate a safe ID for map sources (removes special chars)
+        const safeId = filename.replace(/[^a-zA-Z0-9]/g, '_');
+        const sourceId = `source-${safeId}`;
+
+        // Prevent double loading
+        if (map.getSource(sourceId)) {
+            console.log(`File ${filename} already loaded.`);
+            return;
+        }
+
+        if (uiIndex !== null) updateFileStatus(filename, uiIndex, 'Loading...', 'loading');
+
+        try {
+            const res = await fetch(`/data/${filename}`);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            
+            const geojsonData = await res.json();
+
+            // Add Source
+            map.addSource(sourceId, {
+                type: 'geojson',
+                data: geojsonData
+            });
+
+            const layers = getMapLayers(safeId, sourceId);
+
+            // Add layers
+            layers.forEach(layer => {
+                map.addLayer(layer);
+                addInteractivityToLayer(map, layer.id);
+            });
+
+            if (uiIndex !== null) {
+                updateFileStatus(filename, uiIndex, 'Loaded', 'success', (isVisible) => {
+                    // Callback for the UI checkbox to toggle visibility
+                    toggleLayerVisibility(map, safeId, isVisible);
+                });
+            }
+
+        } catch (err) {
+            console.error(err);
+            if (uiIndex !== null) updateFileStatus(filename, uiIndex, 'Failed', 'error');
+        }
+    },
+
+    /**
+     * Removes a file (Source + Layers).
+     * Used by DebugManager.
+     */
+    removeFile: function(map, filename) {
+        const safeId = filename.replace(/[^a-zA-Z0-9]/g, '_');
+        const sourceId = `source-${safeId}`;
+
+        // 1. Remove Layers
+        const styles = map.getStyle();
+        if (styles && styles.layers) {
+            // Find layers that belong to this source
+            const fileLayers = styles.layers.filter(l => l.source === sourceId);
+            fileLayers.forEach(l => map.removeLayer(l.id));
+        }
+
+        // 2. Remove Source
+        if (map.getSource(sourceId)) {
+            map.removeSource(sourceId);
+        }
+    }
+};
+
+/* --- HELPER FUNCTIONS --- */
 
 /**
- * Updates the visual status panel.
- * If type is 'success', it renders a checkbox control instead of text.
+ * Updates the visual status panel (Left Side).
+ * Added 'onToggle' callback to decouple UI from Map logic.
  */
-function updateFileStatus(filename, index, status, type) {
+function updateFileStatus(filename, index, status, type, onToggle) {
+    const statusList = document.getElementById('status-list');
+    if (!statusList) return;
+
     let item = document.getElementById(`status-${index}`);
     
-    // Create container if it doesn't exist
     if (!item) {
         item = document.createElement('div');
         item.id = `status-${index}`;
@@ -28,134 +132,50 @@ function updateFileStatus(filename, index, status, type) {
             <span class="status-error">${status}</span>
         `;
     } else if (type === 'success') {
-        // Replace loading text with a checkbox control
-        createLayerControl(item, filename, index);
+        createLayerControl(item, filename, index, onToggle);
     }
 }
 
-/**
- * Creates the HTML checkbox and attaches the event listener for toggling layers.
- */
-function createLayerControl(containerElement, filename, index) {
-    containerElement.innerHTML = ''; // Clear loading status
+function createLayerControl(containerElement, filename, index, onToggle) {
+    containerElement.innerHTML = ''; 
 
     const label = document.createElement('label');
     label.className = 'file-label';
-    label.title = filename; // Tooltip for long names
+    label.title = filename;
 
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
-    checkbox.checked = true; // Default to visible
+    checkbox.checked = true;
     checkbox.id = `cb-${index}`;
 
     const span = document.createElement('span');
     span.className = 'filename-text';
     span.textContent = filename;
 
-    // Append elements
     label.appendChild(checkbox);
     label.appendChild(span);
     containerElement.appendChild(label);
 
-    // Event Listener: Toggle Layer Visibility
+    // Link checkbox to the provided callback function
     checkbox.addEventListener('change', (e) => {
-        toggleLayerVisibility(index, e.target.checked);
+        if (onToggle) onToggle(e.target.checked);
     });
 }
 
-/**
- * Toggles the visibility property of all layers associated with a specific file index.
- */
-function toggleLayerVisibility(index, isVisible) {
+function toggleLayerVisibility(map, safeId, isVisible) {
     const visibility = isVisible ? 'visible' : 'none';
     const layerTypes = ['fill', 'line', 'point'];
 
     layerTypes.forEach(type => {
-        const layerId = `layer-${index}-${type}`;
+        const layerId = `layer-${safeId}-${type}`;
         if (map.getLayer(layerId)) {
             map.setLayoutProperty(layerId, 'visibility', visibility);
         }
     });
 }
 
-// Ensure map is loaded before fetching files
-map.on('load', () => {
-    loadFiles();
-});
-
-/**
- * Fetches the list of files and processes them.
- */
-async function loadFiles() {
-    statusList.innerHTML = '';
-    try {
-        const response = await fetch('/api/files');
-        const files = await response.json();
-
-        if (files.length === 0) {
-            statusList.innerHTML = 'No files found in /data';
-            return;
-        }
-
-        for (const [index, filename] of files.entries()) {
-            loadSingleFile(filename, index);
-        }
-    } catch (error) {
-        statusList.innerHTML = `<div class="status-error">API Error: ${error.message}</div>`;
-    }
-}
-
-/**
- * Loads a single GeoJSON/TopoJSON file and adds it to the map.
- */
-async function loadSingleFile(filename, index) {
-    updateFileStatus(filename, index, 'Loading...', 'loading');
-    const sourceId = `source-${index}`;
-
-    try {
-        const res = await fetch(`/data/${filename}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        
-        let geojsonData = await res.json();
-
-        // TopoJSON support logic
-        /* if (filename.endsWith('.topojson')) {
-            const keys = Object.keys(geojsonData.objects);
-            if (keys.length > 0) {
-                geojsonData = topojson.feature(geojsonData, geojsonData.objects[keys[0]]);
-            }
-        } */
-
-        // Add the data source
-        map.addSource(sourceId, {
-            type: 'geojson',
-            data: geojsonData
-        });
-
-        // Get layer definitions from mapStyle.js
-        const layers = getMapLayers(index, sourceId);
-
-        // Add each layer to the map and attach interaction
-        layers.forEach(layer => {
-            map.addLayer(layer);
-            addInteractivityToLayer(layer.id);
-        });
-
-        // Update UI to show checkbox
-        updateFileStatus(filename, index, 'Loaded', 'success');
-
-    } catch (err) {
-        console.error(err);
-        updateFileStatus(filename, index, 'Failed', 'error');
-    }
-}
-
-/**
- * Adds click and hover events to a specific layer.
- */
-function addInteractivityToLayer(layerId) {
+function addInteractivityToLayer(map, layerId) {
     map.on('click', layerId, (e) => {
-        // Ensure the layer is visible before showing popup
         const layout = map.getLayoutProperty(layerId, 'visibility');
         if (layout === 'none') return;
 
@@ -165,23 +185,23 @@ function addInteractivityToLayer(layerId) {
         const coordinates = e.lngLat;
         const properties = feature.properties;
 
-        const description = PopupConfig.createContent(properties);
+        // Ensure PopupConfig exists (from popUpMarker.js)
+        if (typeof PopupConfig !== 'undefined') {
+            const description = PopupConfig.createContent(properties);
+            
+            // Fix wrap for worlds > 360 deg
+            const lngLat = e.lngLat; // maplibre object copy
+            while (Math.abs(e.lngLat.lng - coordinates.lng) > 180) {
+                coordinates.lng += e.lngLat.lng > coordinates.lng ? 360 : -360;
+            }
 
-        while (Math.abs(e.lngLat.lng - coordinates.lng) > 180) {
-            coordinates.lng += e.lngLat.lng > coordinates.lng ? 360 : -360;
+            new maplibregl.Popup()
+                .setLngLat(coordinates)
+                .setHTML(description)
+                .addTo(map);
         }
-
-        new maplibregl.Popup()
-            .setLngLat(coordinates)
-            .setHTML(description)
-            .addTo(map);
     });
 
-    map.on('mouseenter', layerId, () => {
-        map.getCanvas().style.cursor = 'pointer';
-    });
-
-    map.on('mouseleave', layerId, () => {
-        map.getCanvas().style.cursor = '';
-    });
+    map.on('mouseenter', layerId, () => map.getCanvas().style.cursor = 'pointer');
+    map.on('mouseleave', layerId, () => map.getCanvas().style.cursor = '');
 }
