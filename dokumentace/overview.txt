@@ -5,6 +5,8 @@ index.html contains blueprint of a website for server.py to use. Index.html also
 ---LOGIC---
 logic/fileLoader.js contains logic for loading datasets + frontend GUI solution for visualisation of loading status
 
+logic/questionnare.js contains logic for questionnare + freezing of other loadings
+
 ---UI---
 loadMenu.css contains styles for loading status menu (status menu logic is in fileLoader.js)
 

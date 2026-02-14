@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 # Configuration
-PORT = 8001
+PORT = 8000
 DATA_DIR = Path("data")
 
 class MapRequestHandler(http.server.SimpleHTTPRequestHandler):

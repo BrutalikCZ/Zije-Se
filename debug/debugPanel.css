@@ -51,7 +51,7 @@
     border: none;
     border-radius: 4px;
     margin-top: 5px;
-    cursor: not-allowed; 
+    cursor: pointer; 
     opacity: 0.6;
 }
 

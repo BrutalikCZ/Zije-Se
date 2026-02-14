@@ -1,16 +1,19 @@
 // debug/debugPanel.js
-
+import("../logic/questionnaire.js")
 const DebugManager = {
-    init: function(map) {
+   init: function(map) {
+        if (typeof QuestionnaireManager !== 'undefined' && QuestionnaireManager.active) {
+            console.warn("DebugManager: Standard loading blocked by Questionnaire Mode.");
+            return; 
+        }
+
         if (typeof AppConfig === 'undefined' || !AppConfig.debug) {
-            console.log("Normal mode: Auto-loading everything.");
             this.autoLoadStandard(map);
             return;
         }
 
-        console.log("DEBUG MODE: Waiting for manual triggers.");
         this.createUI(map);
-    },
+    }, 
 
     autoLoadStandard: function(map) {
         console.log("Normal mode: Activating standard UI.");
@@ -71,10 +74,13 @@ const DebugManager = {
             }
         });
 
-        document.getElementById('btn-generate-quest').addEventListener('click', () => {
-            alert("Funkce 'Generovat dotazník' není dostupná.\n(Debug Placeholder)");
+      document.getElementById('btn-generate-quest').addEventListener('click', () => {
+            if (typeof QuestionnaireManager !== 'undefined') {
+                QuestionnaireManager.forceOpen();
+            } else {
+                alert("Chyba: QuestionnaireManager nenalezen.");
+            }
         });
-
         this.loadFileList(map);
     },
 

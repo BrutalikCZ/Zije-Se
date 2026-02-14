@@ -1,18 +1,22 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Žije se - Debug Integration</title>
+    <head>
+        <meta charset="UTF-8">
+        <title>Žije se - Debug Integration</title>
+        
+        <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+        <link href="UI/loadMenu.css" rel="stylesheet" />
+        <link href="debug/debugPanel.css" rel="stylesheet" />
+        
+        <link href="UI/questionnaire.css" rel="stylesheet" />
     
-    <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
-    <link href="UI/loadMenu.css" rel="stylesheet" />
-    <link href="debug/debugPanel.css" rel="stylesheet" /> <script src="logic/config.js"></script>
-
-    <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
-</head>
+        <script src="logic/config.js"></script>
+        <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+    </head>
 <body>
 
-    <div id="status-panel" style="display: none;"> <h3>Layers</h3>
+    <div id="status-panel" style="display: none;">
+        <h3>Layers</h3>
         <div id="status-list"></div>
     </div>
     
@@ -26,8 +30,12 @@
     <script src="UI/mapStyle.js"></script>
     <script src="UI/popUpMarker.js"></script>
     
-    <script src="logic/fileLoader.js"></script> <script src="logic/tileLayer.js"></script>  <script src="debug/debugPanel.js"></script> <script>
-        const map = new maplibregl.Map({
+    <script src="logic/fileLoader.js"></script> 
+    <script src="logic/tileLayer.js"></script>
+    
+    <script src="logic/questionnaire.js"></script> <script src="debug/debugPanel.js"></script>    
+    <script>
+        window.map = new maplibregl.Map({
             container: 'map',
             style: {
                 'version': 8,
@@ -36,12 +44,12 @@
                 },
                 'layers': [{ 'id': 'osm-layer', 'type': 'raster', 'source': 'osm' }]
             },
-            center: [15.83, 50.21], zoom: 12
+            center: [15.83, 50.21], 
+            zoom: 12
         });
 
-        map.on('load', () => {
-            
-            DebugManager.init(map);
+        window.map.on('load', () => {
+            DebugManager.init(window.map);
         });
     </script>
 </body>
