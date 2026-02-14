@@ -49,8 +49,16 @@
         });
 
         window.map.on('load', () => {
+    //Makes sure everything is actually loaded to prevent desync
+    const startApp = () => {
+        if (typeof DebugManager !== 'undefined') {
             DebugManager.init(window.map);
-        });
+        } else {
+            setTimeout(startApp, 50);
+        }
+    };
+    startApp();
+});
     </script>
 </body>
 </html>

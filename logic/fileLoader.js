@@ -38,7 +38,6 @@ const FileLoader = {
         const safeId = filename.replace(/[^a-zA-Z0-9]/g, '_');
         const sourceId = `source-${safeId}`;
 
-        // Prevent double loading
         if (map.getSource(sourceId)) {
             console.log(`File ${filename} already loaded.`);
             return;

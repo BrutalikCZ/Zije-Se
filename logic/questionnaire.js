@@ -24,7 +24,6 @@ const QuestionnaireManager = {
     },
 
     forceOpen: function() {
-        // Pokud už je otevřeno, nic nedělej
         if (document.getElementById('quest-overlay')) return;
 
         console.log("Debug: Vynucené otevření dotazníku.");
@@ -37,7 +36,6 @@ const QuestionnaireManager = {
         const overlay = document.createElement('div');
         overlay.id = 'quest-overlay';
 
-        // HTML Struktura
         overlay.innerHTML = `
             <div id="quest-box">
                 <h1>Vítejte v průzkumu</h1>
@@ -84,19 +82,14 @@ const QuestionnaireManager = {
                 document.body.classList.remove('mode-questionnaire');
                 this.active = false;
 
-                // --- OPRAVA ZDE ---
-                // Zjistíme, jestli jsme v debug módu
                 const isDebug = (typeof AppConfig !== 'undefined' && AppConfig.debug);
 
-                // Spustíme standardní aplikaci JENOM POKUD NEJSME V DEBUGU
                 if (!isDebug && typeof DebugManager !== 'undefined' && window.map) {
                     console.log("Questionare finished (User Mode). Starting App...");
                     DebugManager.autoLoadStandard(window.map);
                 } else {
-                    // V debug módu neděláme nic (zůstáváme v debug panelu)
                     console.log("Questionare finished (Debug Mode). Returning to control panel.");
                 }
-                // ------------------
 
             }, 300);
         }

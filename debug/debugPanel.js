@@ -1,12 +1,20 @@
 // debug/debugPanel.js
-import("../logic/questionnaire.js")
+
 const DebugManager = {
-   init: function(map) {
+    map: null,
+
+    init: function(map) {
+        this.map = map; // Uložíme si referenci na mapu pro pozdější použití
+
+        // Kontrola, zda běží dotazník
         if (typeof QuestionnaireManager !== 'undefined' && QuestionnaireManager.active) {
             console.warn("DebugManager: Standard loading blocked by Questionnaire Mode.");
+            // V tomto případě init končí, protože autoLoadStandard zavolá 
+            // QuestionnaireManager sám po svém dokončení.
             return; 
         }
 
+        // Kontrola režimu aplikace
         if (typeof AppConfig === 'undefined' || !AppConfig.debug) {
             this.autoLoadStandard(map);
             return;
@@ -16,6 +24,14 @@ const DebugManager = {
     }, 
 
     autoLoadStandard: function(map) {
+        // Pokud byla metoda zavolána bez mapy (např. z dotazníku), použijeme uloženou
+        const targetMap = map || this.map;
+        
+        if (!targetMap) {
+            console.error("DebugManager: Cannot load standard mode without map instance.");
+            return;
+        }
+
         console.log("Normal mode: Activating standard UI.");
 
         const leftPanel = document.getElementById('status-panel');
@@ -23,20 +39,25 @@ const DebugManager = {
             leftPanel.style.display = 'flex'; 
         }
 
+        // Inicializace vrstev
         if (typeof initTileLayer === 'function') {
-            initTileLayer(map);
+            initTileLayer(targetMap);
         }
 
+        // Inicializace FileLoaderu
         if (typeof FileLoader !== 'undefined' && FileLoader.init) {
-            FileLoader.init(map);
+            FileLoader.init(targetMap);
         } else {
-            console.error("Chyba: FileLoader nenalezen nebo nemá funkci init(). Zkontrolujte logic/fileLoader.js");
+            console.error("Chyba: FileLoader nenalezen nebo nemá funkci init().");
             const list = document.getElementById('status-list');
             if (list) list.innerHTML = "<div class='status-error'>Chyba načítání skriptu FileLoader.</div>";
         }
     },
 
     createUI: function(map) {
+        // Kontrola, zda už panel neexistuje
+        if (document.getElementById('debug-panel')) return;
+
         const panel = document.createElement('div');
         panel.id = 'debug-panel';
         panel.style.display = 'block';
@@ -67,20 +88,21 @@ const DebugManager = {
 
         document.body.appendChild(panel);
 
-        // Listenmap.onery
+        // Event Listenery
         document.getElementById('debug-toggle-tiles').addEventListener('change', (e) => {
             if (e.target.checked) {
                 if (typeof initTileLayer === 'function') initTileLayer(map);
             }
         });
 
-      document.getElementById('btn-generate-quest').addEventListener('click', () => {
+        document.getElementById('btn-generate-quest').addEventListener('click', () => {
             if (typeof QuestionnaireManager !== 'undefined') {
                 QuestionnaireManager.forceOpen();
             } else {
                 alert("Chyba: QuestionnaireManager nenalezen.");
             }
         });
+
         this.loadFileList(map);
     },
 
@@ -90,7 +112,9 @@ const DebugManager = {
         fetch('/api/files')
             .then(res => res.json())
             .then(files => {
+                if (!container) return;
                 container.innerHTML = ''; 
+                
                 const toggleAll = document.getElementById('debug-toggle-all-files');
                 const fileCheckboxes = [];
 
@@ -132,7 +156,7 @@ const DebugManager = {
             })
             .catch(err => {
                 if(container) container.innerText = "Error loading files.";
-                console.error(err);
+                console.error("DebugManager fetch error:", err);
             });
     }
 };
