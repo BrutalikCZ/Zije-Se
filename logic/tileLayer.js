@@ -99,9 +99,42 @@ function initTileLayer(map) {
                 const props = e.features[0].properties;
                 const index = props.INTERNAL_INDEX;
                 if (index === undefined || index === null) return;
-
+            
                 const originalRecord = RAW_DATA[index];
+                
+                // 1. Aktualizace vizuálního panelu (Původní kód)
                 updateInfoPanel(originalRecord.properties);
+            
+                // --- NOVÝ KÓD PRO AI ---
+                // Uložíme relevantní data do globální proměnné pro Chat
+                window.CurrentTileContext = {
+                    id: originalRecord.properties.tile_id,
+                    scores: {
+                        healthcare: originalRecord.properties.healthcareScore,
+                        education: originalRecord.properties.educationScore,
+                        transport: originalRecord.properties.transportScore,
+                        culture: originalRecord.properties.cultureScore,
+                        other: originalRecord.properties.otherScore
+                    },
+                    // Zde jsou všechny objekty v dlaždici (školy, zastávky, atd.)
+                    objects_nearby: originalRecord.properties.context_scored 
+                };
+                
+                console.log("AI Context Updated:", window.CurrentTileContext);
+                
+                // Vizuální notifikace v chatu (volitelné)
+                if (typeof AIChat !== 'undefined') {
+                    const chatMsg = document.getElementById('chat-messages');
+                    if(chatMsg) {
+                         // Malá vizuální nápověda, že AI "vidí" novou oblast
+                         const note = document.createElement('div');
+                         note.className = 'typing-indicator';
+                         note.innerText = `System: AI context updated to Tile ${originalRecord.properties.tile_id}`;
+                         note.style.display = 'block';
+                         chatMsg.appendChild(note);
+                         chatMsg.scrollTop = chatMsg.scrollHeight;
+                    }
+                }
 
                 let context = originalRecord.properties.context_scored || {};
                 let points = [];
