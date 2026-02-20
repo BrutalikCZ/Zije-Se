@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>Žije se - Debug Integration</title>
+        
+        <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+        <link href="UI/loadMenu.css" rel="stylesheet" />
+        <link href="debug/debugPanel.css" rel="stylesheet" />
+        
+        <link href="UI/questionnaire.css" rel="stylesheet" />
+    
+        <script src="logic/config.js"></script>
+        <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+        <link href="UI/chatStyle.css" rel="stylesheet" />
+    </head>
+<body>
+
+    <div id="status-panel" style="display: none;">
+        <h3>Layers</h3>
+        <div id="status-list"></div>
+    </div>
+    
+    <div id="info">
+        <h3>Data Dlaždice</h3>
+        <div id="details">Klikněte na dlaždici.</div>
+    </div>
+
+    <div id="map"></div>
+
+    <script src="UI/mapStyle.js"></script>
+    <script src="UI/popUpMarker.js"></script>
+    
+    <script src="logic/fileLoader.js"></script> 
+    <script src="logic/tileLayer.js"></script>
+    
+    <script src="logic/questionnaire.js"></script> <script src="debug/debugPanel.js"></script> 
+    <script src="AILogic/chatLogic.js"></script>   
+    <script>
+        window.map = new maplibregl.Map({
+            container: 'map',
+            style: {
+                'version': 8,
+                'sources': {
+                    'osm': { 'type': 'raster', 'tiles': ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], 'tileSize': 256 }
+                },
+                'layers': [{ 'id': 'osm-layer', 'type': 'raster', 'source': 'osm' }]
+            },
+            center: [15.83, 50.21], 
+            zoom: 12
+        });
+
+        window.map.on('load', () => {
+    //Makes sure everything is actually loaded to prevent desync
+    const startApp = () => {
+        if (typeof DebugManager !== 'undefined') {
+            DebugManager.init(window.map);
+        } else {
+            setTimeout(startApp, 50);
+        }
+    };
+    startApp();
+});
+    </script>
+</body>
+</html>

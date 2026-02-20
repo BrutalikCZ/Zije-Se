@@ -1,0 +1,15 @@
+server.py serves information to the frontend, specifically fetches datasets, because of JS limits
+
+index.html contains blueprint of a website for server.py to use. Index.html also iniciates the map
+
+---LOGIC---
+logic/fileLoader.js contains logic for loading datasets + frontend GUI solution for visualisation of loading status
+
+logic/questionnare.js contains logic for questionnare + freezing of other loadings
+
+---UI---
+loadMenu.css contains styles for loading status menu (status menu logic is in fileLoader.js)
+
+mapStyle.js contains settings for map styling overall
+
+popUpMarkers.js contains styling config for pop-ups

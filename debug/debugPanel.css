@@ -1,0 +1,65 @@
+/* debug/debugPanel.css */
+#debug-panel {
+    position: fixed;
+    bottom: 10px;
+    left: 10px;
+    width: 300px;
+    background: #FFF;
+    color: #00000036;
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    z-index: 1000;
+    font-family: 'Consolas', 'Monaco', monospace; /* Debug font */
+    font-size: 13px;
+    display: none;
+    max-height: 50vh;
+    overflow-y: auto;
+}
+
+#debug-panel h3 {
+    margin-top: 0;
+    color: #fab1a0;
+    border-bottom: 1px solid #636e72;
+    padding-bottom: 5px;
+    font-size: 14px;
+    text-transform: uppercase;
+}
+
+#debug-panel h4 {
+    margin: 10px 0 5px 0;
+    color: #74b9ff;
+    font-size: 13px;
+}
+
+.debug-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 5px;
+}
+
+.debug-row label {
+    margin-left: 8px;
+    cursor: pointer;
+}
+
+.debug-btn {
+    width: 100%;
+    padding: 6px;
+    background: #636e72;
+    color: rgb(15, 15, 15);
+    border: none;
+    border-radius: 4px;
+    margin-top: 5px;
+    cursor: pointer; 
+    opacity: 0.6;
+}
+
+.debug-btn:hover {
+    background: #636e72;
+}
+
+/* Checkbox style */
+input[type="checkbox"] {
+    accent-color: #00b894;
+}

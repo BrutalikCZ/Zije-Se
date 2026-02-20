@@ -1,0 +1,4 @@
+Posílat do endpointu např. v Pythonu udělat "spojovač" geojson souborů, který ze serveru pošle jeden velký soubor
+
+Při zapnutí se objeví možnosti "prohlížet", nebo "hledat bydlení" které ukáže dotazník a vygeneruje novou databázi v závislosti na odpovědích.
+Odpovědi by mělo být schopno vyplnit AI v chatovacím režimu
