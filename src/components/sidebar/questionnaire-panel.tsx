@@ -190,6 +190,16 @@ export function QuestionnairePanel({ isOpen, onClose, isCollapsed, setIsCollapse
             collapsedIcon={<ListChecks size={20} />}
             collapsedIconTitle={language === 'cs' ? 'Dotazník' : 'Questionnaire'}
         >
+            <div className="text-center shrink-0 mb-6 mt-4">
+                <h1 className="text-2xl font-black uppercase tracking-wider text-white dark:text-black mb-2">
+                    {language === 'cs' ? 'DOTAZNÍK' : 'QUESTIONNAIRE'}
+                </h1>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mb-4 px-2">
+                    {language === 'cs' ? 'Vaše osobní preference pro ideální bydlení' : 'Your personal preferences for ideal living'}
+                </p>
+                <div className="h-px w-full bg-white/10 dark:bg-black/10"></div>
+            </div>
+
             <div className="flex-1 overflow-hidden min-h-0 flex flex-col relative z-10">
                 {mode === 'intro' ? (
                     <div className="flex flex-col h-full">

@@ -111,6 +111,16 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
             collapsedIconTitle="Zije!Se AI"
             extraBottomControls={aiSettingsButton}
         >
+            <div className="text-center shrink-0 mb-6 mt-4">
+                <h1 className="text-2xl font-black uppercase tracking-wider text-white dark:text-black mb-2">
+                    {language === 'cs' ? 'ZIJE!SE AI' : 'ZIJE!SE AI'}
+                </h1>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mb-4 px-2">
+                    {language === 'cs' ? 'Inteligentní asistent pro analýzu míst a lokalit' : 'Intelligent assistant for analyzing places and locations'}
+                </p>
+                <div className="h-px w-full bg-white/10 dark:bg-black/10"></div>
+            </div>
+
             {/* Context Note */}
             {contextNote && (
                 <div className="py-2 text-[#3388ff] text-xs font-medium flex items-center gap-2 shrink-0 relative z-10">

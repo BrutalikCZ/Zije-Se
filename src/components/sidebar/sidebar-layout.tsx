@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, PanelLeftClose, PanelLeft, User, Globe, Coins, LogOut } from 'lucide-react';
+import { ArrowLeft, PanelLeftClose, PanelLeft, User, Globe, Coins, LogOut, X } from 'lucide-react';
 import { useAuth } from '@/components/providers/auth-provider';
 import Link from 'next/link';
 import { useLanguage } from '@/components/providers/language-provider';
@@ -23,6 +23,14 @@ interface SidebarLayoutProps {
     backText?: { cs: string; en: string };
     /** Main content rendered in the middle area (only shown when expanded) */
     children: React.ReactNode;
+    /** If true, the bottom user profile / login section is shown. Defaults to true. */
+    showAuthSection?: boolean;
+    /** If true, hides the expand/collapse button in the header. Defaults to false. */
+    hideCollapseButton?: boolean;
+    /** If true, and hideCollapseButton is false, shows an 'X' (close) icon instead of PanelLeftClose. Defaults to false. */
+    showCloseIcon?: boolean;
+    /** If true, hides the bottom Back button area entirely. Defaults to false. */
+    hideBackButton?: boolean;
 }
 
 export function SidebarLayout({
@@ -36,6 +44,10 @@ export function SidebarLayout({
     extraBottomControls,
     backText,
     children,
+    showAuthSection = true,
+    hideCollapseButton = false,
+    showCloseIcon = false,
+    hideBackButton = false,
 }: SidebarLayoutProps) {
     const { language, toggleLanguage } = useLanguage();
     const { user, logout } = useAuth();
@@ -65,11 +77,11 @@ export function SidebarLayout({
                         <Logo className="h-6 w-6 shrink-0" />
                     </div>
                     <button
-                        onClick={() => setIsCollapsed(!isCollapsed)}
-                        className="p-2 cursor-pointer transition-colors text-white dark:text-black opacity-60 hover:opacity-100"
-                        title={language === 'cs' ? 'Rozbalit panel' : 'Expand panel'}
+                        onClick={() => hideCollapseButton ? onClose() : setIsCollapsed(!isCollapsed)}
+                        className={`p-2 cursor-pointer transition-colors text-white dark:text-black opacity-60 hover:opacity-100 ${hideCollapseButton && !showCloseIcon ? 'invisible' : ''}`}
+                        title={showCloseIcon || hideCollapseButton ? (language === 'cs' ? 'Zavřít panel' : 'Close panel') : (language === 'cs' ? 'Rozbalit panel' : 'Expand panel')}
                     >
-                        <PanelLeft size={20} />
+                        {(showCloseIcon || hideCollapseButton) ? <X size={20} /> : <PanelLeft size={20} />}
                     </button>
                 </div>
             ) : (
@@ -80,11 +92,11 @@ export function SidebarLayout({
                     </div>
 
                     <button
-                        onClick={() => setIsCollapsed(!isCollapsed)}
-                        className="p-2 cursor-pointer transition-colors text-white dark:text-black opacity-60 hover:opacity-100"
-                        title={language === 'cs' ? 'Sbalit panel' : 'Collapse panel'}
+                        onClick={() => hideCollapseButton || showCloseIcon ? onClose() : setIsCollapsed(!isCollapsed)}
+                        className={`p-2 cursor-pointer transition-colors text-white dark:text-black opacity-60 hover:opacity-100 ${hideCollapseButton && !showCloseIcon ? 'invisible' : ''}`}
+                        title={showCloseIcon || hideCollapseButton ? (language === 'cs' ? 'Zavřít panel' : 'Close panel') : (language === 'cs' ? 'Sbalit panel' : 'Collapse panel')}
                     >
-                        <PanelLeftClose size={20} />
+                        {(showCloseIcon || hideCollapseButton) ? <X size={20} /> : <PanelLeftClose size={20} />}
                     </button>
                 </div>
             )}
@@ -112,52 +124,55 @@ export function SidebarLayout({
             <div className={`mt-auto relative z-10 border-t border-white/10 dark:border-black/10 flex shrink-0 ${isCollapsed ? "flex-col gap-4 pt-4 items-center" : "flex-col gap-4 pt-4"}`}>
 
                 {/* User Profile / Login */}
-                {user ? (
-                    <button
-                        onClick={logout}
-                        className={`outline-none focus:outline-none focus:ring-0 cursor-pointer flex items-center rounded-full transition-all transform-gpu duration-300 ease-in-out active:translate-y-px ${isCollapsed
-                            ? "justify-center h-12 w-12 mx-auto bg-[#1a1a1a] dark:bg-[#ececeb] text-white dark:text-black hover:bg-[#262626] dark:hover:bg-[#dcdcdc] border border-white/10 dark:border-black/10 backdrop-blur-md"
-                            : "justify-between gap-3 p-1.5 pl-2 pr-4 w-full bg-[#1a1a1a] dark:bg-[#ececeb] text-sm text-white dark:text-black hover:bg-[#262626] dark:hover:bg-[#dcdcdc] border border-white/10 dark:border-black/10 backdrop-blur-md"
-                            }`}
-                        title={language === 'cs' ? 'Odhlásit se' : 'Logout'}
-                    >
-                        {isCollapsed ? (
-                            <div className="h-8 w-8 rounded-full bg-[#3388ff] flex items-center justify-center text-white font-bold shrink-0">
-                                {user.name.charAt(0).toUpperCase()}
-                            </div>
-                        ) : (
-                            <>
-                                <div className="h-8 w-8 rounded-full bg-[#3388ff] flex items-center justify-center text-white font-bold shrink-0">
-                                    {user.name.charAt(0).toUpperCase()}
-                                </div>
-                                <div className="flex flex-col flex-1 items-start overflow-hidden leading-tight">
-                                    <span className="font-bold truncate w-full text-left">{user.name}</span>
-                                    <div className="flex items-center gap-1 text-[10px] text-[#3388ff] font-medium">
-                                        <Coins size={10} />
-                                        <span>{user.credits} {language === 'cs' ? 'kreditů' : 'credits'}</span>
+                {showAuthSection && (
+                    <>
+                        {user ? (
+                            <button
+                                onClick={logout}
+                                className={`outline-none focus:outline-none focus:ring-0 cursor-pointer flex items-center rounded-full transition-all transform-gpu duration-300 ease-in-out active:translate-y-px ${isCollapsed
+                                    ? "justify-center h-12 w-12 mx-auto bg-[#1a1a1a] dark:bg-[#ececeb] text-white dark:text-black hover:bg-[#262626] dark:hover:bg-[#dcdcdc] border border-white/10 dark:border-black/10 backdrop-blur-md"
+                                    : "justify-between gap-3 p-1.5 pl-2 pr-4 w-full bg-[#1a1a1a] dark:bg-[#ececeb] text-sm text-white dark:text-black hover:bg-[#262626] dark:hover:bg-[#dcdcdc] border border-white/10 dark:border-black/10 backdrop-blur-md"
+                                    }`}
+                                title={language === 'cs' ? 'Odhlásit se' : 'Logout'}
+                            >
+                                {isCollapsed ? (
+                                    <div className="h-8 w-8 rounded-full bg-[#3388ff] flex items-center justify-center text-white font-bold shrink-0">
+                                        {user.name.charAt(0).toUpperCase()}
                                     </div>
-                                </div>
-                                <div className="pr-1 text-[#3388ff]/80 hover:text-[#3388ff] transition-colors">
-                                    <LogOut size={16} />
-                                </div>
-                            </>
+                                ) : (
+                                    <>
+                                        <div className="h-8 w-8 rounded-full bg-[#3388ff] flex items-center justify-center text-white font-bold shrink-0">
+                                            {user.name.charAt(0).toUpperCase()}
+                                        </div>
+                                        <div className="flex flex-col flex-1 items-start overflow-hidden leading-tight">
+                                            <span className="font-bold truncate w-full text-left">{user.name}</span>
+                                            <div className="flex items-center gap-1 text-[10px] text-[#3388ff] font-medium">
+                                                <Coins size={10} />
+                                                <span>{user.credits} {language === 'cs' ? 'kreditů' : 'credits'}</span>
+                                            </div>
+                                        </div>
+                                        <div className="pr-1 text-[#3388ff]/80 hover:text-[#3388ff] transition-colors">
+                                            <LogOut size={16} />
+                                        </div>
+                                    </>
+                                )}
+                            </button>
+                        ) : (
+                            <Link
+                                href="/login"
+                                className={`outline-none focus:outline-none focus:ring-0 cursor-pointer flex items-center justify-center rounded-full transition-all transform-gpu duration-300 ease-in-out active:translate-y-px ${isCollapsed
+                                    ? "h-12 w-12 mx-auto bg-[#1a1a1a] dark:bg-[#ececeb] text-white dark:text-black hover:bg-[#262626] dark:hover:bg-[#dcdcdc] border border-white/10 dark:border-black/10 backdrop-blur-md"
+                                    : "gap-3 px-5 py-3 w-full bg-[#1a1a1a] dark:bg-[#ececeb] text-sm font-medium text-white dark:text-black hover:bg-[#262626] dark:hover:bg-[#dcdcdc] border border-white/10 dark:border-black/10 backdrop-blur-md"
+                                    }`}
+                                title={language === 'cs' ? 'Profil / Přihlásit se' : 'Profile / Login'}
+                            >
+                                <User size={20} />
+                                {!isCollapsed && <span className="flex-1 text-left">{language === 'cs' ? 'Přihlásit se' : 'Login'}</span>}
+                            </Link>
                         )}
-                    </button>
-                ) : (
-                    <Link
-                        href="/login"
-                        className={`outline-none focus:outline-none focus:ring-0 cursor-pointer flex items-center justify-center rounded-full transition-all transform-gpu duration-300 ease-in-out active:translate-y-px ${isCollapsed
-                            ? "h-12 w-12 mx-auto bg-[#1a1a1a] dark:bg-[#ececeb] text-white dark:text-black hover:bg-[#262626] dark:hover:bg-[#dcdcdc] border border-white/10 dark:border-black/10 backdrop-blur-md"
-                            : "gap-3 px-5 py-3 w-full bg-[#1a1a1a] dark:bg-[#ececeb] text-sm font-medium text-white dark:text-black hover:bg-[#262626] dark:hover:bg-[#dcdcdc] border border-white/10 dark:border-black/10 backdrop-blur-md"
-                            }`}
-                        title={language === 'cs' ? 'Profil / Přihlásit se' : 'Profile / Login'}
-                    >
-                        <User size={20} />
-                        {!isCollapsed && <span className="flex-1 text-left">{language === 'cs' ? 'Přihlásit se' : 'Login'}</span>}
-                    </Link>
+                        <div className="h-px w-full bg-white/10 dark:bg-black/10 shrink-0 my-0"></div>
+                    </>
                 )}
-
-                <div className="h-px w-full bg-white/10 dark:bg-black/10 shrink-0 my-0"></div>
 
                 {/* Language & Theme & Extra Controls */}
                 {isCollapsed ? (
@@ -190,7 +205,7 @@ export function SidebarLayout({
                 )}
 
                 {/* Back Button */}
-                {!isCollapsed && (
+                {!isCollapsed && !hideBackButton && (
                     <div
                         className="text-[12px] mt-2 font-medium opacity-60 hover:opacity-100 transition-opacity flex items-center justify-center gap-2 group w-full cursor-pointer"
                         onClick={onClose}
@@ -200,7 +215,7 @@ export function SidebarLayout({
                     </div>
                 )}
 
-                {isCollapsed && (
+                {isCollapsed && !hideBackButton && (
                     <div
                         className="text-[12px] mt-2 font-medium opacity-60 hover:opacity-100 transition-opacity flex items-center justify-center gap-2 group w-full cursor-pointer"
                         onClick={onClose}

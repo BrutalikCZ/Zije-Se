@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Plus_Jakarta_Sans, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import ClickSpark from "@/components/ui/click-spark";
+import SmoothScroll from "@/components/ui/smooth-scroll";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { LanguageProvider } from "@/components/providers/language-provider";
 import { AuthProvider } from "@/components/providers/auth-provider";
@@ -38,19 +39,21 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <LanguageProvider>
-            <AuthProvider>
-              <ClickSpark
-                sparkColor='#fff'
-                sparkSize={10}
-                sparkRadius={15}
-                sparkCount={8}
-                duration={400}
-              >
-                {children}
-              </ClickSpark>
-            </AuthProvider>
-          </LanguageProvider>
+          <SmoothScroll>
+            <LanguageProvider>
+              <AuthProvider>
+                <ClickSpark
+                  sparkColor='#fff'
+                  sparkSize={10}
+                  sparkRadius={15}
+                  sparkCount={8}
+                  duration={400}
+                >
+                  {children}
+                </ClickSpark>
+              </AuthProvider>
+            </LanguageProvider>
+          </SmoothScroll>
         </ThemeProvider>
       </body>
     </html>

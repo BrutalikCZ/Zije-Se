@@ -34,7 +34,16 @@ export function AiSettingsPanel({ isOpen, onClose, isCollapsed, setIsCollapsed }
             extraBottomControls={activeSettingsIcon}
             backText={{ cs: 'Zpět do AI Chatu', en: 'Back to AI Chat' }}
         >
-            <div className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-6 relative z-10 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent pr-1 pt-4 pb-4">
+            <div className="text-center shrink-0 mb-6 mt-4">
+                <h1 className="text-2xl font-black uppercase tracking-wider text-white dark:text-black mb-2">
+                    {language === 'cs' ? 'NASTAVENÍ AI' : 'AI SETTINGS'}
+                </h1>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mb-4 px-2">
+                    {language === 'cs' ? 'Konfigurace chování a preferencí asistenta' : 'Configuration of assistant behavior and preferences'}
+                </p>
+                <div className="h-px w-full bg-white/10 dark:bg-black/10"></div>
+            </div>
+            <div className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-6 relative z-10 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent pr-1 pt-2 pb-4">
                 <div className="flex flex-col items-center justify-center h-full opacity-50 text-center px-4 gap-4">
                     <CodeXml size={48} className="opacity-60" />
                     <p className="text-sm font-medium">

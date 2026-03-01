@@ -8,7 +8,7 @@ import { Logo } from "@/components/logo";
 import { ModeToggle } from "@/components/mode-toggle";
 import { Map, MapControls } from "@/components/map/map";
 import { LegacyLayers } from "@/components/map/legacy-layers";
-import { QuestionnairePanel, SettingsPanel, AIChatPanel, AiSettingsPanel } from "@/components/sidebar";
+import { QuestionnairePanel, SettingsPanel, AIChatPanel, AiSettingsPanel, AuthPanel } from "@/components/sidebar";
 import { useAuth } from "@/components/providers/auth-provider";
 
 export default function AppPage() {
@@ -16,6 +16,7 @@ export default function AppPage() {
     const { language, toggleLanguage } = useLanguage();
     const [isQuestionnaireOpen, setIsQuestionnaireOpen] = useState(false);
     const [isChatOpen, setIsChatOpen] = useState(false);
+    const [isAuthOpen, setIsAuthOpen] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(false);
 
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -149,7 +150,7 @@ export default function AppPage() {
             <div className={`relative h-full shrink-0 transition-all duration-300 ease-in-out ${isCollapsed ? "w-20" : "w-80"}`}>
                 {/* Original Sidebar */}
                 <aside
-                    className={`absolute top-0 left-0 w-full h-full border-r border-black/5 dark:border-white/5 bg-[#0b0b0b] text-white dark:bg-[#f3f3f3] dark:text-black flex flex-col p-4 md:p-6 z-10 overflow-hidden transition-all duration-300 ease-in-out ${(isChatOpen || isQuestionnaireOpen || isSettingsOpen || isAiSettingsOpen) ? "-translate-x-full opacity-0 pointer-events-none" : "translate-x-0 opacity-100 pointer-events-auto"
+                    className={`absolute top-0 left-0 w-full h-full border-r border-black/5 dark:border-white/5 bg-[#0b0b0b] text-white dark:bg-[#f3f3f3] dark:text-black flex flex-col p-4 md:p-6 z-10 overflow-hidden transition-all duration-300 ease-in-out ${(isChatOpen || isQuestionnaireOpen || isSettingsOpen || isAiSettingsOpen || isAuthOpen) ? "-translate-x-full opacity-0 pointer-events-none" : "translate-x-0 opacity-100 pointer-events-auto"
                         } ${isCollapsed ? "items-center justify-between" : ""}`}
                 >
                     {/* Background Glows (adapted from navbar styling) */}
@@ -343,8 +344,8 @@ export default function AppPage() {
                                 )}
                             </button>
                         ) : (
-                            <Link
-                                href="/login"
+                            <button
+                                onClick={() => setIsAuthOpen(true)}
                                 className={`outline-none focus:outline-none focus:ring-0 cursor-pointer flex items-center justify-center rounded-full transition-all transform-gpu duration-300 ease-in-out active:translate-y-px ${isCollapsed
                                     ? "h-12 w-12 mx-auto bg-[#1a1a1a] dark:bg-[#ececeb] text-white dark:text-black hover:bg-[#262626] dark:hover:bg-[#dcdcdc] border border-white/10 dark:border-black/10 backdrop-blur-md"
                                     : "gap-3 px-5 py-3 w-full bg-[#1a1a1a] dark:bg-[#ececeb] text-sm font-medium text-white dark:text-black hover:bg-[#262626] dark:hover:bg-[#dcdcdc] border border-white/10 dark:border-black/10 backdrop-blur-md"
@@ -353,7 +354,7 @@ export default function AppPage() {
                             >
                                 <User size={20} />
                                 {!isCollapsed && <span className="flex-1 text-left">{language === 'cs' ? 'Přihlásit se' : 'Login'}</span>}
-                            </Link>
+                            </button>
                         )}
 
                         <div className="h-px w-full bg-white/10 dark:bg-black/10 shrink-0 my-0"></div>
@@ -425,6 +426,12 @@ export default function AppPage() {
                 <QuestionnairePanel
                     isOpen={isQuestionnaireOpen}
                     onClose={() => setIsQuestionnaireOpen(false)}
+                    isCollapsed={isCollapsed}
+                    setIsCollapsed={setIsCollapsed}
+                />
+                <AuthPanel
+                    isOpen={isAuthOpen}
+                    onClose={() => setIsAuthOpen(false)}
                     isCollapsed={isCollapsed}
                     setIsCollapsed={setIsCollapsed}
                 />

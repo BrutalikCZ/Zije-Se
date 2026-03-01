@@ -50,7 +50,16 @@ export function SettingsPanel({
             collapsedIconTitle={language === 'cs' ? 'Nastavení' : 'Settings'}
             extraBottomControls={activeSettingsIcon}
         >
-            <div className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-6 relative z-10 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent pr-1 pt-4 pb-4">
+            <div className="text-center shrink-0 mb-6 mt-4">
+                <h1 className="text-2xl font-black uppercase tracking-wider text-white dark:text-black mb-2">
+                    {language === 'cs' ? 'NASTAVENÍ MAPY' : 'MAP SETTINGS'}
+                </h1>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mb-4 px-2">
+                    {language === 'cs' ? 'Přizpůsobení vizuálního zobrazení mapových vrstev' : 'Customization of visual map layer display'}
+                </p>
+                <div className="h-px w-full bg-white/10 dark:bg-black/10"></div>
+            </div>
+            <div className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-6 relative z-10 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent pr-1 pb-4">
                 {/* BASE MAP TYPE */}
                 <div className="flex flex-col gap-3">
                     <span className="text-sm font-semibold opacity-60">{language === 'cs' ? 'Podkladová Mapa' : 'Base Map'}</span>
