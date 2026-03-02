@@ -19,6 +19,7 @@ import { createPortal } from "react-dom";
 import { X, Minus, Plus, Locate, Maximize, Loader2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { MapHeatmapLayer } from "./heatmap-layer";
 
 // Check document class for theme (works with next-themes, etc.)
 function getDocumentTheme(): Theme | null {
@@ -1477,6 +1478,7 @@ export {
   MapControls,
   MapRoute,
   MapClusterLayer,
+  MapHeatmapLayer,
 };
 
 export type { MapRef, MapViewport };

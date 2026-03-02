@@ -1,0 +1,42 @@
+Nutno přepsat celý algorytmus.
+
+50 otázek = 2500 kombinací
+Minimum odpovězených otázek = 10 nezáleže na pořadí
+
+Q = question
+T = tile
+O(Q*T)
+
+Na základě odpovědí se začnou filtrovat dlaždice takto:
+    (0: tileValueSystem score zůstane zachovaný pro zobrazení, ale přímo ve výpočtu je irelevantní)
+    1: První krok je vzít jednu z odpovědí a zeptat se každé dlaždice, jestli splňuje tento dotaz
+    2:pokud je dotaz záporný (NECHCI bydlet u vězení, v záplavové oblasti...) tato dlaždice dostane blacklist k dalšímu zpracování
+    2,5: Pokud je dotaz pozitivní (chci mít blízko...), do dlaždice je nahraná hodnota +1
+    3: Opakování kroků 1-2.5 dokud nebudou zpracované všechny dlaždice
+    4:Dlaždicebudou zařazeny podle % úspěšných shod
+
+Barvy a úspšné shody(Odpovědi můžou být v rozmezí 10-50):
+    0/blacklist = tmavě červená
+    1% - 10% světle červená
+    11% - 20% světle červená
+    21% - 30% žlutá
+    31% - 40% žlutá
+    41% - 50% oranžová
+    51% - 60% oranžová
+    61% - 70% oranžová
+    71% - 80% světle zelená
+    81% - 90% tmavě zelená
+    91% - 99% tmavě zelená
+    100% světle modrá
+
+
+
+
+
+
+Plány do budoucna:
+    Dotazník bude mít každou otázku podle zužení okruhu přidanou hodnotu. Např otázka "Chcete bydlet ve městě?" Bude mít největší hodnotu,
+    protože pokud uživatel odpoví "Ano", tak se mapa stáhne z celé ČR na pár dlaždic měst a okolí...
+
+
+

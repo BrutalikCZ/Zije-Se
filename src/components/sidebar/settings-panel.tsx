@@ -19,6 +19,8 @@ interface SettingsPanelProps {
     setLayerOpacity: (v: number) => void;
     mapOpacity: number;
     setMapOpacity: (v: number) => void;
+    showAverageValueHeatmap: boolean;
+    setShowAverageValueHeatmap: (v: boolean) => void;
     resetSettings: () => void;
 }
 
@@ -26,7 +28,7 @@ export function SettingsPanel({
     isOpen, onClose, isCollapsed, setIsCollapsed,
     mapType, setMapType, colorBlindMode, setColorBlindMode,
     showFills, setShowFills, layerOpacity, setLayerOpacity,
-    mapOpacity, setMapOpacity, resetSettings
+    mapOpacity, setMapOpacity, showAverageValueHeatmap, setShowAverageValueHeatmap, resetSettings
 }: SettingsPanelProps) {
     const { language } = useLanguage();
 
@@ -90,6 +92,16 @@ export function SettingsPanel({
                         <div className={`absolute w-4 h-4 bg-white dark:bg-[#0b0b0b] rounded-full left-1 top-1 transition-transform ${showFills ? 'translate-x-4' : ''}`}></div>
                     </div>
                     <span className="opacity-80 group-hover:opacity-100 transition-opacity">{language === 'cs' ? 'Zobrazit výplně ploch' : 'Show Fill Areas'}</span>
+                </label>
+
+                {/* TOGGLE HEATMAP */}
+                <label className="flex items-center gap-4 cursor-pointer group text-sm font-medium mb-1">
+                    <div className="relative flex items-center shrink-0">
+                        <input type="checkbox" className="sr-only" checked={showAverageValueHeatmap} onChange={(e) => setShowAverageValueHeatmap(e.target.checked)} />
+                        <div className={`w-10 h-6 rounded-full transition-colors ${showAverageValueHeatmap ? 'bg-[#3388ff]' : 'bg-white/10 dark:bg-black/10'}`}></div>
+                        <div className={`absolute w-4 h-4 bg-white dark:bg-[#0b0b0b] rounded-full left-1 top-1 transition-transform ${showAverageValueHeatmap ? 'translate-x-4' : ''}`}></div>
+                    </div>
+                    <span className="opacity-80 group-hover:opacity-100 transition-opacity">{language === 'cs' ? 'Zobrazit průměrnou hodnotu (Heatmap)' : 'Show average value (Heatmap)'}</span>
                 </label>
 
                 {/* LAYER OPACITY */}

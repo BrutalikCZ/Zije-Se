@@ -6,10 +6,11 @@ import { ArrowLeft, BotMessageSquare, ListChecks, PanelLeftClose, PanelLeft, Use
 import { useLanguage } from "@/components/providers/language-provider";
 import { Logo } from "@/components/logo";
 import { ModeToggle } from "@/components/mode-toggle";
-import { Map, MapControls } from "@/components/map/map";
+import { Map, MapControls, MapHeatmapLayer } from "@/components/map/map";
 import { LegacyLayers } from "@/components/map/legacy-layers";
 import { QuestionnairePanel, SettingsPanel, AIChatPanel, AiSettingsPanel, AuthPanel } from "@/components/sidebar";
 import { useAuth } from "@/components/providers/auth-provider";
+import * as turf from '@turf/centroid';
 
 export default function AppPage() {
     const { user, logout } = useAuth();
@@ -33,12 +34,16 @@ export default function AppPage() {
     const [activeLayers, setActiveLayers] = useState<Record<string, boolean>>({});
     const [files, setFiles] = useState<string[]>([]);
 
+    const [showAverageValueHeatmap, setShowAverageValueHeatmap] = useState(false);
+    const [heatmapData, setHeatmapData] = useState<GeoJSON.FeatureCollection<GeoJSON.Point> | null>(null);
+
     const resetSettings = () => {
         setMapType('default');
         setColorBlindMode(false);
         setShowFills(true);
         setLayerOpacity(0.8);
         setMapOpacity(1.0);
+        setShowAverageValueHeatmap(false);
     };
 
     useEffect(() => {
@@ -141,6 +146,49 @@ export default function AppPage() {
         }
         return undefined; // Let maplibre component use default dark/light Carto
     }, [mapType]);
+
+    useEffect(() => {
+        if (showAverageValueHeatmap && !heatmapData) {
+            fetch('/data/tiles_database_value.json')
+                .then(r => r.json())
+                .then((data: any) => {
+                    const featureList = Array.isArray(data) ? data : (data.features || []);
+                    const points = featureList.map((f: any) => {
+                        try {
+                            const centroid = turf.default(f) as GeoJSON.Feature<GeoJSON.Point>;
+                            if (!centroid || !centroid.geometry) return null;
+                            const props = f.properties || {};
+                            // Average of all specific scores
+                            const scores = [
+                                props.healthcareScore || 0,
+                                props.educationScore || 0,
+                                props.transportScore || 0,
+                                props.cultureScore || 0,
+                                props.otherScore || 0
+                            ];
+                            const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+
+                            return {
+                                ...centroid,
+                                properties: {
+                                    averageScore: avg
+                                }
+                            };
+                        } catch (e) {
+                            return null;
+                        }
+                    }).filter(Boolean) as GeoJSON.Feature<GeoJSON.Point>[];
+
+                    setHeatmapData({
+                        type: 'FeatureCollection',
+                        features: points
+                    });
+                })
+                .catch(err => {
+                    console.error("Chyba při stahování hodnot pro heatmapu:", err);
+                });
+        }
+    }, [showAverageValueHeatmap, heatmapData]);
 
     return (
         <div className="h-screen w-full flex overflow-hidden bg-[#f3f3f3] dark:bg-[#0b0b0b] font-sans text-black dark:text-white transition-colors duration-300">
@@ -451,6 +499,8 @@ export default function AppPage() {
                     setLayerOpacity={setLayerOpacity}
                     mapOpacity={mapOpacity}
                     setMapOpacity={setMapOpacity}
+                    showAverageValueHeatmap={showAverageValueHeatmap}
+                    setShowAverageValueHeatmap={setShowAverageValueHeatmap}
                     resetSettings={resetSettings}
                 />
             </div>
@@ -468,6 +518,29 @@ export default function AppPage() {
                         layerOpacity={layerOpacity}
                         showFills={showFills}
                     />
+                    {showAverageValueHeatmap && heatmapData && (
+                        <MapHeatmapLayer
+                            data={heatmapData}
+                            weightProp="averageScore"
+                            radius={[
+                                "interpolate",
+                                ["linear"],
+                                ["zoom"],
+                                6, 20,
+                                10, 80,
+                                14, 250
+                            ]}
+                            opacity={0.8}
+                            intensity={1}
+                            colors={[
+                                "rgba(0, 0, 255, 0)",
+                                "cyan",
+                                "lime",
+                                "yellow",
+                                "red"
+                            ]}
+                        />
+                    )}
                 </Map>
             </main>
         </div>
