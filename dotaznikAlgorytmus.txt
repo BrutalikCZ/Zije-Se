@@ -38,5 +38,6 @@ Plány do budoucna:
     Dotazník bude mít každou otázku podle zužení okruhu přidanou hodnotu. Např otázka "Chcete bydlet ve městě?" Bude mít největší hodnotu,
     protože pokud uživatel odpoví "Ano", tak se mapa stáhne z celé ČR na pár dlaždic měst a okolí...
 
-
+Implementace:
+    Potřebuji vymyslet system určování nejbližších dlaždic
 

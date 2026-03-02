@@ -20,6 +20,7 @@ import { X, Minus, Plus, Locate, Maximize, Loader2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { MapHeatmapLayer } from "./heatmap-layer";
+import { MapFillLayer } from "./fill-layer";
 
 // Check document class for theme (works with next-themes, etc.)
 function getDocumentTheme(): Theme | null {
@@ -1479,6 +1480,7 @@ export {
   MapRoute,
   MapClusterLayer,
   MapHeatmapLayer,
+  MapFillLayer,
 };
 
 export type { MapRef, MapViewport };

@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { ArrowLeft, BotMessageSquare, ListChecks, PanelLeftClose, PanelLeft, User, Globe, ChevronDown, Layers, Settings2, RotateCcw, X, AlertTriangle, Stethoscope, Bus, Landmark, Dumbbell, GraduationCap, TreePine, Map as MapIcon, Factory, Coins, LogOut } from "lucide-react";
 import { useLanguage } from "@/components/providers/language-provider";
 import { Logo } from "@/components/logo";
 import { ModeToggle } from "@/components/mode-toggle";
-import { Map, MapControls, MapHeatmapLayer } from "@/components/map/map";
+import { Map, MapControls, MapFillLayer } from "@/components/map/map";
 import { LegacyLayers } from "@/components/map/legacy-layers";
 import { QuestionnairePanel, SettingsPanel, AIChatPanel, AiSettingsPanel, AuthPanel } from "@/components/sidebar";
 import { useAuth } from "@/components/providers/auth-provider";
@@ -34,8 +34,89 @@ export default function AppPage() {
     const [activeLayers, setActiveLayers] = useState<Record<string, boolean>>({});
     const [files, setFiles] = useState<string[]>([]);
 
-    const [showAverageValueHeatmap, setShowAverageValueHeatmap] = useState(false);
-    const [heatmapData, setHeatmapData] = useState<GeoJSON.FeatureCollection<GeoJSON.Point> | null>(null);
+    // Per-category heatmap toggles
+    const HEATMAP_CATEGORIES = [
+        { key: 'healthcareScore', labelCs: 'Zdravotnictví', labelEn: 'Healthcare' },
+        { key: 'educationScore', labelCs: 'Vzdělávání', labelEn: 'Education' },
+        { key: 'transportScore', labelCs: 'Doprava', labelEn: 'Transport' },
+        { key: 'cultureScore', labelCs: 'Kultura', labelEn: 'Culture' },
+        { key: 'otherScore', labelCs: 'Ostatní', labelEn: 'Other' },
+    ] as const;
+
+    // Unified step-based color scale for all categories
+    // Score 0=dark red → light red → yellow → orange → light green → dark green → 100+=light blue
+    const HEATMAP_COLOR_SCALE = [
+        { threshold: 0, color: '#8B0000' },     // 0%  - dark red
+        { threshold: 1, color: '#FF6B6B' },      // 1-10% - light red
+        { threshold: 11, color: '#FF6B6B' },     // 11-20% - light red
+        { threshold: 21, color: '#FFD700' },     // 21-30% - yellow
+        { threshold: 31, color: '#FFD700' },     // 31-40% - yellow
+        { threshold: 41, color: '#FF8C00' },     // 41-50% - orange
+        { threshold: 51, color: '#FF8C00' },     // 51-60% - orange
+        { threshold: 61, color: '#FF8C00' },     // 61-70% - orange
+        { threshold: 71, color: '#90EE90' },     // 71-80% - light green
+        { threshold: 81, color: '#228B22' },     // 81-90% - dark green
+        { threshold: 91, color: '#228B22' },     // 91-99% - dark green
+        { threshold: 100, color: '#4FC3F7' },    // 100%+ - light blue
+    ];
+
+    const [activeHeatmaps, setActiveHeatmaps] = useState<Record<string, boolean>>({});
+    const [heatmapData, setHeatmapData] = useState<GeoJSON.FeatureCollection | null>(null);
+    const [highlightedTilesData, setHighlightedTilesData] = useState<GeoJSON.FeatureCollection | null>(null);
+
+    // Compute centroid of a polygon (simple average of coordinates)
+    const getPolygonCentroid = useCallback((feature: GeoJSON.Feature): [number, number] | null => {
+        try {
+            const geom = feature.geometry as any;
+            if (!geom || !geom.coordinates) return null;
+            const coords = geom.coordinates[0] as [number, number][];
+            if (!coords || coords.length === 0) return null;
+            let sumLng = 0, sumLat = 0;
+            // Exclude the closing vertex (same as first)
+            const len = coords.length - 1;
+            for (let i = 0; i < len; i++) {
+                sumLng += coords[i][0];
+                sumLat += coords[i][1];
+            }
+            return [sumLng / len, sumLat / len];
+        } catch {
+            return null;
+        }
+    }, []);
+
+    const handleTileClick = useCallback((clickedFeature: GeoJSON.Feature) => {
+        if (!heatmapData) return;
+
+        const clickedCenter = getPolygonCentroid(clickedFeature);
+        if (!clickedCenter) return;
+
+        // Compute distances from clicked tile to all tiles
+        const withDistances = heatmapData.features
+            .map(f => {
+                const center = getPolygonCentroid(f);
+                if (!center) return null;
+                const dLng = center[0] - clickedCenter[0];
+                const dLat = center[1] - clickedCenter[1];
+                const dist = dLng * dLng + dLat * dLat; // squared euclidean is fine for sorting
+                return { feature: f, dist };
+            })
+            .filter(Boolean) as { feature: GeoJSON.Feature; dist: number }[];
+
+        // Sort by distance, take the 100 closest (excluding distance=0 which is the clicked tile itself)
+        withDistances.sort((a, b) => a.dist - b.dist);
+        const nearest = withDistances.slice(0, 101); // include clicked tile + 100 nearest
+
+        setHighlightedTilesData({
+            type: 'FeatureCollection',
+            features: nearest.map(n => n.feature)
+        });
+    }, [heatmapData, getPolygonCentroid]);
+
+    const toggleHeatmap = (key: string, value: boolean) => {
+        setActiveHeatmaps(prev => ({ ...prev, [key]: value }));
+    };
+
+    const anyHeatmapActive = Object.values(activeHeatmaps).some(Boolean);
 
     const resetSettings = () => {
         setMapType('default');
@@ -43,7 +124,7 @@ export default function AppPage() {
         setShowFills(true);
         setLayerOpacity(0.8);
         setMapOpacity(1.0);
-        setShowAverageValueHeatmap(false);
+        setActiveHeatmaps({});
     };
 
     useEffect(() => {
@@ -148,47 +229,21 @@ export default function AppPage() {
     }, [mapType]);
 
     useEffect(() => {
-        if (showAverageValueHeatmap && !heatmapData) {
-            fetch('/data/tiles_database_value.json')
+        if (anyHeatmapActive && !heatmapData) {
+            fetch('/data/tiles_database_final_purged.json')
                 .then(r => r.json())
                 .then((data: any) => {
                     const featureList = Array.isArray(data) ? data : (data.features || []);
-                    const points = featureList.map((f: any) => {
-                        try {
-                            const centroid = turf.default(f) as GeoJSON.Feature<GeoJSON.Point>;
-                            if (!centroid || !centroid.geometry) return null;
-                            const props = f.properties || {};
-                            // Average of all specific scores
-                            const scores = [
-                                props.healthcareScore || 0,
-                                props.educationScore || 0,
-                                props.transportScore || 0,
-                                props.cultureScore || 0,
-                                props.otherScore || 0
-                            ];
-                            const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
-
-                            return {
-                                ...centroid,
-                                properties: {
-                                    averageScore: avg
-                                }
-                            };
-                        } catch (e) {
-                            return null;
-                        }
-                    }).filter(Boolean) as GeoJSON.Feature<GeoJSON.Point>[];
-
                     setHeatmapData({
                         type: 'FeatureCollection',
-                        features: points
+                        features: featureList
                     });
                 })
                 .catch(err => {
                     console.error("Chyba při stahování hodnot pro heatmapu:", err);
                 });
         }
-    }, [showAverageValueHeatmap, heatmapData]);
+    }, [anyHeatmapActive, heatmapData]);
 
     return (
         <div className="h-screen w-full flex overflow-hidden bg-[#f3f3f3] dark:bg-[#0b0b0b] font-sans text-black dark:text-white transition-colors duration-300">
@@ -499,8 +554,9 @@ export default function AppPage() {
                     setLayerOpacity={setLayerOpacity}
                     mapOpacity={mapOpacity}
                     setMapOpacity={setMapOpacity}
-                    showAverageValueHeatmap={showAverageValueHeatmap}
-                    setShowAverageValueHeatmap={setShowAverageValueHeatmap}
+                    heatmapCategories={HEATMAP_CATEGORIES}
+                    activeHeatmaps={activeHeatmaps}
+                    toggleHeatmap={toggleHeatmap}
                     resetSettings={resetSettings}
                 />
             </div>
@@ -518,27 +574,29 @@ export default function AppPage() {
                         layerOpacity={layerOpacity}
                         showFills={showFills}
                     />
-                    {showAverageValueHeatmap && heatmapData && (
-                        <MapHeatmapLayer
-                            data={heatmapData}
-                            weightProp="averageScore"
-                            radius={[
-                                "interpolate",
-                                ["linear"],
-                                ["zoom"],
-                                6, 20,
-                                10, 80,
-                                14, 250
-                            ]}
-                            opacity={0.8}
-                            intensity={1}
-                            colors={[
-                                "rgba(0, 0, 255, 0)",
-                                "cyan",
-                                "lime",
-                                "yellow",
-                                "red"
-                            ]}
+                    {heatmapData && HEATMAP_CATEGORIES.map(cat => (
+                        activeHeatmaps[cat.key] && (
+                            <MapFillLayer
+                                key={cat.key}
+                                id={cat.key}
+                                data={heatmapData}
+                                colorProp={cat.key}
+                                colorScale={HEATMAP_COLOR_SCALE}
+                                defaultColor="rgba(0,0,0,0)"
+                                opacity={layerOpacity}
+                                onClick={handleTileClick}
+                            />
+                        )
+                    ))}
+                    {highlightedTilesData && (
+                        <MapFillLayer
+                            id="highlighted-nearest"
+                            data={highlightedTilesData}
+                            colorProp="healthcareScore"
+                            colorScale={[]}
+                            defaultColor="rgba(0, 200, 255, 0.25)"
+                            opacity={1}
+                            outlineColor="#00e5ff"
                         />
                     )}
                 </Map>

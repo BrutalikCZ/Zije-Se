@@ -1,0 +1,7 @@
+tilePurger, následně implementovat nový systém skoré do heatmapy
+
+Potom implementovat hodnoty z dotazníku
+
+Vytvořit výpočetní mechanismus na backendu
+
+servovat heatmapě (celá ČR krom HK by měla být červená například)

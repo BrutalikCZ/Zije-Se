@@ -56,12 +56,12 @@ export function MapHeatmapLayer({
     useEffect(() => {
         if (!isLoaded || !map) return;
 
-        // Prepare color ramp
-        const colorRamp: any[] = ["interpolate", ["linear"], ["heatmap-density"]];
-        const step = 1 / (colors.length - 1);
-        colors.forEach((color, i) => {
-            colorRamp.push(i * step, color);
-        });
+        // Prepare color ramp (discrete steps, no interpolation)
+        const colorRamp: any[] = ["step", ["heatmap-density"], colors[0]];
+        const stepSize = 1 / (colors.length - 1);
+        for (let i = 1; i < colors.length; i++) {
+            colorRamp.push(i * stepSize, colors[i]);
+        }
 
         // Determine weight expression
         let heatmapWeight: any = weight;
@@ -134,11 +134,11 @@ export function MapHeatmapLayer({
         }
 
         if (colorsChanged) {
-            const colorRamp: any[] = ["interpolate", ["linear"], ["heatmap-density"]];
-            const step = 1 / (colors.length - 1);
-            colors.forEach((color, i) => {
-                colorRamp.push(i * step, color);
-            });
+            const colorRamp: any[] = ["step", ["heatmap-density"], colors[0]];
+            const stepSize = 1 / (colors.length - 1);
+            for (let i = 1; i < colors.length; i++) {
+                colorRamp.push(i * stepSize, colors[i]);
+            }
             map.setPaintProperty(layerId, "heatmap-color", colorRamp as any);
         }
 
