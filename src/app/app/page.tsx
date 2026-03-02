@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
-import { ArrowLeft, BotMessageSquare, ListChecks, PanelLeftClose, PanelLeft, User, Globe, ChevronDown, Layers, Settings2, RotateCcw, X, AlertTriangle, Stethoscope, Bus, Landmark, Dumbbell, GraduationCap, TreePine, Map as MapIcon, Factory, Coins, LogOut } from "lucide-react";
+import { ArrowLeft, BotMessageSquare, ListChecks, PanelLeftClose, PanelLeft, User, Globe, ChevronDown, Layers, Settings2, RotateCcw, X, AlertTriangle, Stethoscope, Bus, Landmark, Dumbbell, GraduationCap, TreePine, Map as MapIcon, Factory, LogOut } from "lucide-react";
 import { useLanguage } from "@/components/providers/language-provider";
 import { Logo } from "@/components/logo";
 import { ModeToggle } from "@/components/mode-toggle";
@@ -433,12 +433,8 @@ export default function AppPage() {
                                         <div className="h-8 w-8 rounded-full bg-[#3388ff] flex items-center justify-center text-white font-bold shrink-0">
                                             {user.name.charAt(0).toUpperCase()}
                                         </div>
-                                        <div className="flex flex-col flex-1 items-start overflow-hidden leading-tight">
+                                        <div className="flex flex-col flex-1 items-start justify-center overflow-hidden leading-tight">
                                             <span className="font-bold truncate w-full text-left">{user.name}</span>
-                                            <div className="flex items-center gap-1 text-[10px] text-[#3388ff] font-medium">
-                                                <Coins size={10} />
-                                                <span>{user.credits} {language === 'cs' ? 'kreditů' : 'credits'}</span>
-                                            </div>
                                         </div>
                                         <div className="pr-1 text-[#3388ff]/80 hover:text-[#3388ff] transition-colors">
                                             <LogOut size={16} />

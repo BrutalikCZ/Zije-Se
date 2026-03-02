@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, PanelLeftClose, PanelLeft, User, Globe, Coins, LogOut, X } from 'lucide-react';
+import { ArrowLeft, PanelLeftClose, PanelLeft, User, Globe, LogOut, X } from 'lucide-react';
 import { useAuth } from '@/components/providers/auth-provider';
 import Link from 'next/link';
 import { useLanguage } from '@/components/providers/language-provider';
@@ -144,12 +144,8 @@ export function SidebarLayout({
                                         <div className="h-8 w-8 rounded-full bg-[#3388ff] flex items-center justify-center text-white font-bold shrink-0">
                                             {user.name.charAt(0).toUpperCase()}
                                         </div>
-                                        <div className="flex flex-col flex-1 items-start overflow-hidden leading-tight">
+                                        <div className="flex flex-col flex-1 items-start justify-center overflow-hidden leading-tight">
                                             <span className="font-bold truncate w-full text-left">{user.name}</span>
-                                            <div className="flex items-center gap-1 text-[10px] text-[#3388ff] font-medium">
-                                                <Coins size={10} />
-                                                <span>{user.credits} {language === 'cs' ? 'kreditů' : 'credits'}</span>
-                                            </div>
                                         </div>
                                         <div className="pr-1 text-[#3388ff]/80 hover:text-[#3388ff] transition-colors">
                                             <LogOut size={16} />

@@ -416,7 +416,7 @@ export default function Home() {
               {language === 'cs' ? 'Ceník' : 'Pricing'}
             </h2>
             <p className="text-sm text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-              {language === 'cs' ? 'Vyberte si plán, který odpovídá vašim potřebám při hledání bydlení.' : 'Choose a plan that matches your needs when looking for a home.'}
+              {language === 'cs' ? 'Díky komerčním licencím může být ZIJE!SE pro všechny běžné uživatele zdarma. Děkujeme!' : 'Thanks to commercial licenses, ZIJE!SE can be free for all regular users. Thank you!'}
             </p>
           </FadeInUp>
 
@@ -430,9 +430,9 @@ export default function Home() {
             <ScaleIn className="relative group z-10 min-w-[85vw] md:min-w-0 snap-center" delay={0}>
               <div className="bg-transparent border border-black/5 dark:border-white/5 rounded-3xl md:rounded-r-none md:rounded-l-[3rem] p-8 md:p-12 flex flex-col h-full transition-all duration-300 overflow-hidden relative">
                 <div className="mb-8">
-                  <h3 className="text-lg font-bold mb-1 text-[#0b0b0b] dark:text-white">{language === 'cs' ? 'Základ' : 'Basic'}</h3>
+                  <h3 className="text-lg font-bold mb-1 text-[#0b0b0b] dark:text-white">{language === 'cs' ? 'Osobní použití' : 'Personal Use'}</h3>
                   <p className="text-sm text-gray-500 dark:text-gray-400 font-light">
-                    {language === 'cs' ? 'Pro první prozkoumání' : 'For first exploration'}
+                    {language === 'cs' ? 'Zcela zdarma pro běžné uživatele' : 'Completely free for regular users'}
                   </p>
                 </div>
 
@@ -447,8 +447,8 @@ export default function Home() {
                   {[
                     { text: language === 'cs' ? 'Přístup k interaktivní mapě' : 'Access to interactive map', included: true },
                     { text: language === 'cs' ? 'Procházení datasetů' : 'Browse datasets', included: true },
-                    { text: language === 'cs' ? 'AI chat asistent' : 'AI chat assistant', included: false },
-                    { text: language === 'cs' ? 'Ukládání historie chatu' : 'Chat history saving', included: false }
+                    { text: language === 'cs' ? 'AI chat asistent' : 'AI chat assistant', included: true },
+                    { text: language === 'cs' ? 'Ukládání historie chatu' : 'Chat history saving', included: true }
                   ].map((item, i) => (
                     <li key={i} className={`flex items-center gap-3 text-sm flex-wrap sm:flex-nowrap ${item.included ? 'text-gray-600 dark:text-gray-400' : 'text-gray-400 dark:text-gray-600 opacity-60'}`}>
                       <div className="w-6 h-6 rounded-full bg-black/5 dark:bg-white/5 flex items-center justify-center flex-shrink-0">
@@ -480,10 +480,10 @@ export default function Home() {
                   <div className="flex items-center justify-between mb-8">
                     <div>
                       <h3 className="text-lg font-bold mb-1 flex items-center gap-2 text-white dark:text-[#0b0b0b]">
-                        Premium <Zap className="w-4 h-4 text-[#3388ff] fill-[#3388ff]" strokeWidth={1.5} />
+                        {language === 'cs' ? 'Komerční licence' : 'Commercial'} <Zap className="w-4 h-4 text-[#3388ff] fill-[#3388ff]" strokeWidth={1.5} />
                       </h3>
                       <p className="text-sm text-gray-400 dark:text-gray-600 font-light">
-                        {language === 'cs' ? 'Plný přístup ke všemu' : 'Full access to everything'}
+                        {language === 'cs' ? 'Děkujeme, že podporujete provoz zdarma!' : 'Thank you for supporting the free version!'}
                       </p>
                     </div>
                   </div>
@@ -497,10 +497,10 @@ export default function Home() {
 
                   <ul className="space-y-5 mb-10 flex-grow">
                     {[
-                      (language === 'cs' ? 'Vše z plánu Základ' : 'Everything from Basic plan'),
-                      (language === 'cs' ? 'Neomezený AI chat asistent' : 'Unlimited AI chat assistant'),
-                      (language === 'cs' ? 'Ukládání historie chatu' : 'Chat history saving'),
-                      (language === 'cs' ? 'A mnoho dalšího' : 'And much more')
+                      (language === 'cs' ? 'Vše z osobního použití' : 'Everything from Personal use'),
+                      (language === 'cs' ? 'Komerční využití dat' : 'Commercial data usage'),
+                      (language === 'cs' ? 'API přístup (připravujeme)' : 'API access (coming soon)'),
+                      (language === 'cs' ? 'Prioritní podpora' : 'Priority support')
                     ].map((item, i) => (
                       <li key={i} className="flex items-center gap-3 text-sm">
                         <div className="w-6 h-6 rounded-full bg-[#3388ff]/10 flex items-center justify-center flex-shrink-0">
@@ -512,7 +512,7 @@ export default function Home() {
                   </ul>
 
                   <button onClick={() => setIsAuthOpen(true)} className="w-full px-5 py-2.5 rounded-full bg-[#3388ff] text-sm text-white font-medium text-center hover:bg-[#2563eb] transition-all duration-300 border border-white/10 dark:border-black/10">
-                    {language === 'cs' ? 'Získat Premium' : 'Get Premium'}
+                    {language === 'cs' ? 'Získat Licenci' : 'Get License'}
                   </button>
                 </div>
               </div>
