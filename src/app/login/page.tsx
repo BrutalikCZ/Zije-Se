@@ -94,7 +94,7 @@ export default function LoginPage() {
                         </h1>
                         <p className="text-sm text-gray-500 dark:text-gray-400">
                             {isRegistering
-                                ? (language === 'cs' ? 'Zaregistrujte se pro ukládání postupu a získání kreditů' : 'Register to save your progress and earn credits')
+                                ? (language === 'cs' ? 'Zaregistrujte se pro ukládání postupu a nastavení' : 'Register to save your progress and settings')
                                 : (language === 'cs' ? 'Zadejte své údaje pro návrat do aplikace' : 'Enter your details to sign in to the app')}
                         </p>
                     </div>

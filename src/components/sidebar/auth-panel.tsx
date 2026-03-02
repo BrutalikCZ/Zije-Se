@@ -100,7 +100,7 @@ export function AuthPanel({
                     </h1>
                     <p className="text-xs text-gray-400 dark:text-gray-500 mb-4 px-2">
                         {isRegistering
-                            ? (language === 'cs' ? 'Zaregistrujte se pro ukládání postupu a získání kreditů' : 'Register to save your progress and earn credits')
+                            ? (language === 'cs' ? 'Zaregistrujte se pro ukládání postupu a nastavení' : 'Register to save your progress and settings')
                             : (language === 'cs' ? 'Zadejte své údaje pro návrat do aplikace' : 'Enter your details to sign in to the app')}
                     </p>
                     <div className="h-px w-full bg-white/10 dark:bg-black/10"></div>
