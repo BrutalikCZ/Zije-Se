@@ -52,6 +52,7 @@ export function SettingsPanel({
             collapsedIcon={<Settings2 size={20} />}
             collapsedIconTitle={language === 'cs' ? 'Nastavení' : 'Settings'}
             extraBottomControls={activeSettingsIcon}
+            showAuthSection={false}
         >
             <div className="text-center shrink-0 mb-6 mt-4">
                 <h1 className="text-2xl font-black uppercase tracking-wider text-white dark:text-black mb-2">
@@ -62,14 +63,15 @@ export function SettingsPanel({
                 </p>
                 <div className="h-px w-full bg-white/10 dark:bg-black/10"></div>
             </div>
-            <div className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-6 relative z-10 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent pr-1 pb-4">
+            <div className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-6 relative z-10 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent pr-1 pb-4" data-lenis-prevent>
                 {/* BASE MAP TYPE */}
                 <div className="flex flex-col gap-3">
                     <span className="text-sm font-semibold opacity-60">{language === 'cs' ? 'Podkladová Mapa' : 'Base Map'}</span>
-                    <div className="flex gap-2 text-sm font-medium">
-                        <button className={`cursor-pointer flex-1 py-2 rounded-full transition-all transform-gpu duration-300 active:translate-y-px border border-white/10 dark:border-black/10 backdrop-blur-md ${mapType === 'default' ? 'bg-[#3388ff] text-white' : 'bg-[#1a1a1a] dark:bg-[#ececeb] text-white dark:text-black hover:bg-[#262626] dark:hover:bg-[#dcdcdc]'}`} onClick={() => setMapType('default')}>{language === 'cs' ? 'Základní' : 'Default'}</button>
-                        <button className={`cursor-pointer flex-1 py-2 rounded-full transition-all transform-gpu duration-300 active:translate-y-px border border-white/10 dark:border-black/10 backdrop-blur-md ${mapType === 'satellite' ? 'bg-[#3388ff] text-white' : 'bg-[#1a1a1a] dark:bg-[#ececeb] text-white dark:text-black hover:bg-[#262626] dark:hover:bg-[#dcdcdc]'}`} onClick={() => setMapType('satellite')}>{language === 'cs' ? 'Satelit' : 'Satellite'}</button>
-                        <button className={`cursor-pointer flex-1 py-2 rounded-full transition-all transform-gpu duration-300 active:translate-y-px border border-white/10 dark:border-black/10 backdrop-blur-md ${mapType === 'osm' ? 'bg-[#3388ff] text-white' : 'bg-[#1a1a1a] dark:bg-[#ececeb] text-white dark:text-black hover:bg-[#262626] dark:hover:bg-[#dcdcdc]'}`} onClick={() => setMapType('osm')}>OSM</button>
+                    <div className="flex gap-2 text-sm font-medium flex-wrap">
+                        <button className={`cursor-pointer flex-1 min-w-[30%] py-2 rounded-full transition-all transform-gpu duration-300 active:translate-y-px border border-white/10 dark:border-black/10 backdrop-blur-md ${mapType === 'default' ? 'bg-[#3388ff] text-white' : 'bg-[#1a1a1a] dark:bg-[#ececeb] text-white dark:text-black hover:bg-[#262626] dark:hover:bg-[#dcdcdc]'}`} onClick={() => setMapType('default')}>{language === 'cs' ? 'Základní' : 'Default'}</button>
+                        <button className={`cursor-pointer flex-1 min-w-[30%] py-2 rounded-full transition-all transform-gpu duration-300 active:translate-y-px border border-white/10 dark:border-black/10 backdrop-blur-md ${mapType === 'satellite' ? 'bg-[#3388ff] text-white' : 'bg-[#1a1a1a] dark:bg-[#ececeb] text-white dark:text-black hover:bg-[#262626] dark:hover:bg-[#dcdcdc]'}`} onClick={() => setMapType('satellite')}>{language === 'cs' ? 'Satelit' : 'Satellite'}</button>
+                        <button className={`cursor-pointer flex-1 min-w-[30%] py-2 rounded-full transition-all transform-gpu duration-300 active:translate-y-px border border-white/10 dark:border-black/10 backdrop-blur-md ${mapType === 'osm' ? 'bg-[#3388ff] text-white' : 'bg-[#1a1a1a] dark:bg-[#ececeb] text-white dark:text-black hover:bg-[#262626] dark:hover:bg-[#dcdcdc]'}`} onClick={() => setMapType('osm')}>OSM</button>
+                        <button className={`cursor-pointer flex-1 min-w-[30%] py-2 rounded-full transition-all transform-gpu duration-300 active:translate-y-px border border-white/10 dark:border-black/10 backdrop-blur-md ${mapType === 'katastr' ? 'bg-[#3388ff] text-white' : 'bg-[#1a1a1a] dark:bg-[#ececeb] text-white dark:text-black hover:bg-[#262626] dark:hover:bg-[#dcdcdc]'}`} onClick={() => setMapType('katastr')}>{language === 'cs' ? 'Katastr' : 'Cadastre'}</button>
                     </div>
                 </div>
 

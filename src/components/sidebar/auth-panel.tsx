@@ -91,7 +91,7 @@ export function AuthPanel({
             showCloseIcon={showCloseIcon}
             hideBackButton={hideBackButton}
         >
-            <div className="flex flex-col h-full overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent pr-2 relative z-10 w-full">
+            <div className="flex flex-col h-full overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent pr-2 relative z-10 w-full" data-lenis-prevent>
                 <div className="text-center shrink-0 mb-6 mt-4">
                     <h1 className="text-2xl font-black uppercase tracking-wider text-white dark:text-black mb-2">
                         {isRegistering
@@ -124,7 +124,7 @@ export function AuthPanel({
                                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                                 required={isRegistering}
                                 placeholder={language === 'cs' ? 'Jméno' : 'Name'}
-                                className="w-full pl-11 pr-4 py-3 bg-[#1a1a1a] dark:bg-white text-white dark:text-black border border-white/10 dark:border-black/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#3388ff]/50 transition-all text-sm placeholder:text-gray-500"
+                                className="w-full pl-11 pr-5 py-3 bg-[#1a1a1a] dark:bg-[#ececeb] text-sm text-white dark:text-black border border-white/10 dark:border-black/10 rounded-full focus:outline-none focus:border-[#3388ff]/50 focus:ring-1 focus:ring-[#3388ff]/20 backdrop-blur-md transition-all placeholder:text-gray-500"
                             />
                         </div>
                     )}
@@ -139,7 +139,7 @@ export function AuthPanel({
                             onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                             required
                             placeholder={language === 'cs' ? 'E-mailová adresa' : 'Email Address'}
-                            className="w-full pl-11 pr-4 py-3 bg-[#1a1a1a] dark:bg-white text-white dark:text-black border border-white/10 dark:border-black/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#3388ff]/50 transition-all text-sm placeholder:text-gray-500"
+                            className="w-full pl-11 pr-5 py-3 bg-[#1a1a1a] dark:bg-[#ececeb] text-sm text-white dark:text-black border border-white/10 dark:border-black/10 rounded-full focus:outline-none focus:border-[#3388ff]/50 focus:ring-1 focus:ring-[#3388ff]/20 backdrop-blur-md transition-all placeholder:text-gray-500"
                         />
                     </div>
 
@@ -153,7 +153,7 @@ export function AuthPanel({
                             onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                             required
                             placeholder={language === 'cs' ? 'Heslo' : 'Password'}
-                            className="w-full pl-11 pr-4 py-3 bg-[#1a1a1a] dark:bg-white text-white dark:text-black border border-white/10 dark:border-black/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#3388ff]/50 transition-all text-sm placeholder:text-gray-500"
+                            className="w-full pl-11 pr-5 py-3 bg-[#1a1a1a] dark:bg-[#ececeb] text-sm text-white dark:text-black border border-white/10 dark:border-black/10 rounded-full focus:outline-none focus:border-[#3388ff]/50 focus:ring-1 focus:ring-[#3388ff]/20 backdrop-blur-md transition-all placeholder:text-gray-500"
                         />
                     </div>
 
@@ -186,7 +186,7 @@ export function AuthPanel({
                     <button
                         type="submit"
                         disabled={isLoading}
-                        className="mt-4 w-full py-3 px-4 bg-[#3388ff] hover:bg-[#2563eb] text-white rounded-xl font-medium text-sm transition-all transform-gpu active:scale-[0.98] disabled:opacity-70 disabled:pointer-events-none flex items-center justify-center gap-2 shadow-lg shadow-[#3388ff]/20"
+                        className="mt-4 w-full py-3 px-5 bg-[#3388ff] hover:bg-[#2563eb] text-white text-sm font-medium rounded-full transition-all transform-gpu duration-300 ease-in-out active:translate-y-px disabled:opacity-70 disabled:pointer-events-none flex items-center justify-center gap-2 shadow-lg border border-white/10 dark:border-black/10 backdrop-blur-md"
                     >
                         {isLoading ? (
                             <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>

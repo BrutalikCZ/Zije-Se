@@ -10,7 +10,8 @@ interface QuestionnairePanelProps {
     onClose: () => void;
     isCollapsed: boolean;
     setIsCollapsed: (v: boolean) => void;
-    onEvaluate?: (answers: Record<number, boolean>) => void;
+    onEvaluated?: () => void;
+    onLoginClick?: () => void;
 }
 
 const getQuestions = (lang: 'cs' | 'en') => {
@@ -128,16 +129,28 @@ const getQuestions = (lang: 'cs' | 'en') => {
     });
 };
 
-export function QuestionnairePanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onEvaluate }: QuestionnairePanelProps) {
+export function QuestionnairePanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onEvaluated, onLoginClick }: QuestionnairePanelProps) {
     const { language } = useLanguage();
-    const [mode, setMode] = useState<'intro' | 'questionnaire'>('intro');
+    const [mode, setMode] = useState<'intro' | 'questionnaire' | 'result'>('intro');
     const [answers, setAnswers] = useState<Record<number, boolean>>({});
 
     const { user, updateUser } = useAuth();
 
+    React.useEffect(() => {
+        if (user?.questionnaireData && Object.keys(answers).length === 0) {
+            setAnswers(user.questionnaireData);
+        }
+    }, [user, isOpen]);
+
     const questions = getQuestions(language as 'cs' | 'en');
     const stepperRef = useRef<any>(null);
     const completedSteps = Object.keys(answers).map(key => parseInt(key, 10) + 1);
+    const answeredCount = Object.keys(answers).length;
+    const isFinished = answeredCount === questions.length;
+    const hasHistory = answeredCount > 0;
+
+    const firstUnansweredIndex = questions.findIndex((_, i) => answers[i] === undefined);
+    const calculatedInitialStep = firstUnansweredIndex === -1 ? 1 : firstUnansweredIndex + 1;
 
     const handleAnswer = (index: number, answer: boolean) => {
         setAnswers(prev => ({ ...prev, [index]: answer }));
@@ -171,12 +184,10 @@ export function QuestionnairePanel({ isOpen, onClose, isCollapsed, setIsCollapse
             }
         }
 
-        // Evaluate questionnaire answers for custom heatmap
-        onEvaluate?.(answers);
-
-        setMode('intro');
-        setAnswers({});
-        onClose();
+        if (onEvaluated) {
+            onEvaluated();
+        }
+        setMode('result');
     };
 
     const handleSkip = () => {
@@ -193,6 +204,8 @@ export function QuestionnairePanel({ isOpen, onClose, isCollapsed, setIsCollapse
             zIndex={20}
             collapsedIcon={<ListChecks size={20} />}
             collapsedIconTitle={language === 'cs' ? 'Dotazník' : 'Questionnaire'}
+            showAuthSection={mode === 'intro'}
+            onLoginClick={onLoginClick}
         >
             <div className="text-center shrink-0 mb-6 mt-4">
                 <h1 className="text-2xl font-black uppercase tracking-wider text-white dark:text-black mb-2">
@@ -205,7 +218,27 @@ export function QuestionnairePanel({ isOpen, onClose, isCollapsed, setIsCollapse
             </div>
 
             <div className="flex-1 overflow-hidden min-h-0 flex flex-col relative z-10">
-                {mode === 'intro' ? (
+                {mode === 'result' ? (
+                    <div className="flex flex-col h-full items-center justify-center text-center p-6 w-full">
+                        <h2 className="text-xl tracking-tight leading-tight font-black mb-4 uppercase">
+                            {language === 'cs' ? 'Děkujeme za vyplnění!' : 'Thank you for answering!'}
+                        </h2>
+                        <p className="text-sm font-medium opacity-80 mb-8 leading-relaxed">
+                            {isFinished
+                                ? (language === 'cs' ? 'Vyplnili jste celý dotazník, mapa je plně optimalizována pro vás. Heatmapu můžete kdykoliv vypnout a znovu zapnout v "Nastavení Mapy".' : 'You completed the whole questionnaire, the map is fully optimized for you. You can toggle the heatmap anytime in "Map Settings".')
+                                : (language === 'cs' ? `Odpověděli jste na ${answeredCount} z 50 otázek. Pro ještě lepší a přesnější mapu prosím příště vyplňte i zbývající otázky! Heatmapu si můžete vždy přizpůsobit v Nastavení.` : `You answered ${answeredCount} of 50 questions. For even better and more accurate map results, please complete the remaining questions next time! You can always customize the heatmap in Settings.`)}
+                        </p>
+                        <button
+                            onClick={() => {
+                                setMode('intro');
+                                onClose();
+                            }}
+                            className="cursor-pointer px-8 py-3 w-full rounded-full bg-[#3388ff] hover:bg-[#2563eb] text-white font-medium transition-transform transform-gpu duration-300 active:translate-y-px shadow-lg border border-white/10 dark:border-black/10 backdrop-blur-md"
+                        >
+                            {language === 'cs' ? 'Pokračovat' : 'Continue'}
+                        </button>
+                    </div>
+                ) : mode === 'intro' ? (
                     <div className="flex flex-col h-full">
                         <p className="text-sm md:text-md opacity-80 mb-6 leading-relaxed font-medium">
                             {language === 'cs'
@@ -214,11 +247,27 @@ export function QuestionnairePanel({ isOpen, onClose, isCollapsed, setIsCollapse
                         </p>
 
                         <div className="flex flex-col gap-3 mt-auto pt-4 text-sm w-full">
+                            {!user && (
+                                <div className="text-center text-[11px] text-[#3388ff]/70 -mb-1 font-medium">
+                                    {language === 'cs' ? 'Pro vyplnění dotazníku se přihlaste' : 'Log in to complete the questionnaire'}
+                                </div>
+                            )}
                             <button
-                                onClick={() => setMode('questionnaire')}
-                                className="w-full cursor-pointer text-center px-4 py-3 rounded-full bg-[#3388ff] hover:bg-[#2563eb] text-white font-medium transition-transform transform-gpu duration-300 active:translate-y-px shadow-lg border border-white/10 dark:border-black/10 backdrop-blur-md"
+                                onClick={() => {
+                                    if (!user) return;
+                                    if (isFinished) {
+                                        setAnswers({});
+                                    }
+                                    setMode('questionnaire');
+                                }}
+                                disabled={!user}
+                                className={`w-full text-center px-4 py-3 rounded-full font-medium transition-transform transform-gpu duration-300 shadow-lg border border-white/10 dark:border-black/10 backdrop-blur-md ${!user ? 'opacity-50 cursor-not-allowed bg-[#3388ff]/50 text-white/50' : 'cursor-pointer bg-[#3388ff] hover:bg-[#2563eb] text-white active:translate-y-px'}`}
                             >
-                                {language === 'cs' ? 'Začít dotazník' : 'Start questionnaire'}
+                                {isFinished
+                                    ? (language === 'cs' ? 'Začít nový dotazník' : 'Start new questionnaire')
+                                    : hasHistory
+                                        ? (language === 'cs' ? 'Pokračovat v dotazníku' : 'Continue questionnaire')
+                                        : (language === 'cs' ? 'Začít dotazník' : 'Start questionnaire')}
                             </button>
 
                             <button
@@ -234,7 +283,7 @@ export function QuestionnairePanel({ isOpen, onClose, isCollapsed, setIsCollapse
                         {/* @ts-ignore */}
                         <Stepper
                             ref={stepperRef}
-                            initialStep={1}
+                            initialStep={calculatedInitialStep}
                             completedSteps={completedSteps}
                             className="!h-full !flex-1 flex flex-col"
                             onStepChange={(step: number) => console.log(step)}
@@ -262,17 +311,17 @@ export function QuestionnairePanel({ isOpen, onClose, isCollapsed, setIsCollapse
 
                                     <div className="flex flex-1 justify-center">
                                         <button
-                                            onClick={currentStep >= 10 ? handleFinish : undefined}
-                                            className={`group relative overflow-hidden px-2 py-2.5 rounded-full font-bold transition-all transform-gpu duration-300 border backdrop-blur-md flex items-center justify-center w-full max-w-[120px] ${currentStep >= 10 ? 'bg-white hover:bg-gray-100 text-black dark:bg-[#0b0b0b] dark:text-white dark:hover:bg-[#1a1a1a] border border-transparent dark:border-black/10 active:translate-y-px shadow-md cursor-pointer' : 'bg-[#1a1a1a] dark:bg-[#ececeb] border-white/10 dark:border-black/10 text-white dark:text-black cursor-default opacity-80'}`}
+                                            onClick={answeredCount >= 10 ? handleFinish : undefined}
+                                            className={`group relative overflow-hidden px-2 py-2.5 rounded-full font-bold transition-all transform-gpu duration-300 border backdrop-blur-md flex items-center justify-center w-full max-w-[120px] ${answeredCount >= 10 ? 'bg-white hover:bg-gray-100 text-black dark:bg-[#0b0b0b] dark:text-white dark:hover:bg-[#1a1a1a] border border-transparent dark:border-black/10 active:translate-y-px shadow-md cursor-pointer' : 'bg-[#1a1a1a] dark:bg-[#ececeb] border-white/10 dark:border-black/10 text-white dark:text-black cursor-default opacity-80'}`}
                                         >
-                                            {currentStep >= 10 ? (
+                                            {answeredCount >= 10 ? (
                                                 <span>{language === 'cs' ? 'Vyhodnotit' : 'Evaluate'}</span>
                                             ) : (
                                                 <>
                                                     <span className="group-hover:opacity-0 transition-opacity">{language === 'cs' ? 'Vyhodnotit' : 'Eval'}</span>
                                                     <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                                         <span className="text-[10px] mr-1 opacity-80">{language === 'cs' ? 'Zbývá' : 'Left'}:</span>
-                                                        <span className="font-black mr-1">{10 - currentStep}</span>
+                                                        <span className="font-black mr-1">{Math.max(0, 10 - answeredCount)}</span>
                                                         <Lock size={10} className="opacity-80" />
                                                     </div>
                                                 </>

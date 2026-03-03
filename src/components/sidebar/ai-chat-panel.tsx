@@ -10,6 +10,7 @@ interface AIChatPanelProps {
     isCollapsed: boolean;
     setIsCollapsed: (v: boolean) => void;
     onOpenAiSettings: () => void;
+    onLoginClick: () => void;
 }
 
 interface Message {
@@ -17,7 +18,7 @@ interface Message {
     content: string;
 }
 
-export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOpenAiSettings }: AIChatPanelProps) {
+export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOpenAiSettings, onLoginClick }: AIChatPanelProps) {
     const { language } = useLanguage();
     const { user } = useAuth();
     const isLoggedIn = !!user;
@@ -110,6 +111,7 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
             collapsedIcon={<BotMessageSquare size={20} />}
             collapsedIconTitle="Zije!Se AI"
             extraBottomControls={aiSettingsButton}
+            onLoginClick={onLoginClick}
         >
             <div className="text-center shrink-0 mb-6 mt-4">
                 <h1 className="text-2xl font-black uppercase tracking-wider text-white dark:text-black mb-2">
@@ -130,7 +132,7 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
             )}
 
             {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-4 relative z-10 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent pr-1">
+            <div className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-4 relative z-10 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent pr-1" data-lenis-prevent>
                 {messages.length === 0 && (
                     <div className="h-full flex flex-col items-center justify-center text-center opacity-50 gap-4 mt-8">
                         <p className="max-w-[200px] text-sm">
