@@ -31,6 +31,8 @@ interface SidebarLayoutProps {
     showCloseIcon?: boolean;
     /** If true, hides the bottom Back button area entirely. Defaults to false. */
     hideBackButton?: boolean;
+    /** Callback to handle login button click. If provided, login will trigger this instead of linking to /login */
+    onLoginClick?: () => void;
 }
 
 export function SidebarLayout({
@@ -48,6 +50,7 @@ export function SidebarLayout({
     hideCollapseButton = false,
     showCloseIcon = false,
     hideBackButton = false,
+    onLoginClick,
 }: SidebarLayoutProps) {
     const { language, toggleLanguage } = useLanguage();
     const { user, logout } = useAuth();
@@ -154,8 +157,8 @@ export function SidebarLayout({
                                 )}
                             </button>
                         ) : (
-                            <Link
-                                href="/login"
+                            <button
+                                onClick={onLoginClick}
                                 className={`outline-none focus:outline-none focus:ring-0 cursor-pointer flex items-center justify-center rounded-full transition-all transform-gpu duration-300 ease-in-out active:translate-y-px ${isCollapsed
                                     ? "h-12 w-12 mx-auto bg-[#1a1a1a] dark:bg-[#ececeb] text-white dark:text-black hover:bg-[#262626] dark:hover:bg-[#dcdcdc] border border-white/10 dark:border-black/10 backdrop-blur-md"
                                     : "gap-3 px-5 py-3 w-full bg-[#1a1a1a] dark:bg-[#ececeb] text-sm font-medium text-white dark:text-black hover:bg-[#262626] dark:hover:bg-[#dcdcdc] border border-white/10 dark:border-black/10 backdrop-blur-md"
@@ -164,13 +167,11 @@ export function SidebarLayout({
                             >
                                 <User size={20} />
                                 {!isCollapsed && <span className="flex-1 text-left">{language === 'cs' ? 'Přihlásit se' : 'Login'}</span>}
-                            </Link>
+                            </button>
                         )}
                         <div className="h-px w-full bg-white/10 dark:bg-black/10 shrink-0 my-0"></div>
                     </>
                 )}
-
-                {/* Language & Theme & Extra Controls */}
                 {isCollapsed ? (
                     <>
                         <button

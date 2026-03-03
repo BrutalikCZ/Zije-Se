@@ -23,6 +23,15 @@ export default function AppPage() {
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isAiSettingsOpen, setIsAiSettingsOpen] = useState(false);
 
+    // Auth Panel Toggle Exposed for nested components
+    const openAuthPanel = () => {
+        setIsQuestionnaireOpen(false);
+        setIsChatOpen(false);
+        setIsSettingsOpen(false);
+        setIsAiSettingsOpen(false);
+        setIsAuthOpen(true);
+    };
+
     // Map Settings State
     const [mapType, setMapType] = useState('default');
     const [colorBlindMode, setColorBlindMode] = useState(false);
@@ -139,6 +148,14 @@ export default function AppPage() {
             .catch(err => console.error("Chyba při načítání souborů:", err));
     }, []);
 
+    const handleQuestionnaireEvaluated = () => {
+        const newHeatmaps: Record<string, boolean> = {};
+        HEATMAP_CATEGORIES.forEach(cat => {
+            newHeatmaps[cat.key] = true;
+        });
+        setActiveHeatmaps(newHeatmaps);
+    };
+
     const CATEGORY_MAP: Record<string, string[]> = {
         "Povodně a Rizika": ["záplavové", "zranitelnost"],
         "Zdravotnictví": ["lékař", "nemocnice", "ústav", "lázně", "zubní"],
@@ -222,6 +239,42 @@ export default function AppPage() {
                     minzoom: 0,
                     maxzoom: 19
                 }]
+            };
+            return { light: style as any, dark: style as any };
+        }
+        if (mapType === 'katastr') {
+            const style = {
+                version: 8,
+                sources: {
+                    'osm': {
+                        type: 'raster',
+                        tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+                        tileSize: 256,
+                        attribution: '© OpenStreetMap'
+                    },
+                    'katastr': {
+                        type: 'raster',
+                        tiles: ['https://services.cuzk.cz/wmts/local-km-wmts-google/rest/WMTS/default/KN/{z}/{y}/{x}'],
+                        tileSize: 256,
+                        attribution: '© ČÚZK'
+                    }
+                },
+                layers: [
+                    {
+                        id: 'osm',
+                        type: 'raster',
+                        source: 'osm',
+                        minzoom: 0,
+                        maxzoom: 19
+                    },
+                    {
+                        id: 'katastr',
+                        type: 'raster',
+                        source: 'katastr',
+                        minzoom: 15,
+                        maxzoom: 24
+                    }
+                ]
             };
             return { light: style as any, dark: style as any };
         }
@@ -444,7 +497,7 @@ export default function AppPage() {
                             </button>
                         ) : (
                             <button
-                                onClick={() => setIsAuthOpen(true)}
+                                onClick={openAuthPanel}
                                 className={`outline-none focus:outline-none focus:ring-0 cursor-pointer flex items-center justify-center rounded-full transition-all transform-gpu duration-300 ease-in-out active:translate-y-px ${isCollapsed
                                     ? "h-12 w-12 mx-auto bg-[#1a1a1a] dark:bg-[#ececeb] text-white dark:text-black hover:bg-[#262626] dark:hover:bg-[#dcdcdc] border border-white/10 dark:border-black/10 backdrop-blur-md"
                                     : "gap-3 px-5 py-3 w-full bg-[#1a1a1a] dark:bg-[#ececeb] text-sm font-medium text-white dark:text-black hover:bg-[#262626] dark:hover:bg-[#dcdcdc] border border-white/10 dark:border-black/10 backdrop-blur-md"
@@ -515,6 +568,7 @@ export default function AppPage() {
                     isCollapsed={isCollapsed}
                     setIsCollapsed={setIsCollapsed}
                     onOpenAiSettings={() => setIsAiSettingsOpen(true)}
+                    onLoginClick={openAuthPanel}
                 />
                 <AiSettingsPanel
                     isOpen={isAiSettingsOpen}
@@ -527,6 +581,8 @@ export default function AppPage() {
                     onClose={() => setIsQuestionnaireOpen(false)}
                     isCollapsed={isCollapsed}
                     setIsCollapsed={setIsCollapsed}
+                    onEvaluated={handleQuestionnaireEvaluated}
+                    onLoginClick={openAuthPanel}
                 />
                 <AuthPanel
                     isOpen={isAuthOpen}
