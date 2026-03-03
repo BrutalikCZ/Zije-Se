@@ -63,7 +63,7 @@ export function SettingsPanel({
                 </p>
                 <div className="h-px w-full bg-white/10 dark:bg-black/10"></div>
             </div>
-            <div className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-6 relative z-10 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent pr-1 pb-4">
+            <div className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-6 relative z-10 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent pr-1 pb-4" data-lenis-prevent>
                 {/* BASE MAP TYPE */}
                 <div className="flex flex-col gap-3">
                     <span className="text-sm font-semibold opacity-60">{language === 'cs' ? 'Podkladová Mapa' : 'Base Map'}</span>

@@ -85,7 +85,7 @@ const Stepper = forwardRef(({
   return (
     <div className={`outer-container ${rest.className || ''}`} style={rest.style}>
       <div className={`step-circle-container ${stepCircleContainerClassName}`}>
-        <div ref={scrollContainerRef} className={`step-indicator-row overflow-x-auto scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent ${stepContainerClassName}`}>
+        <div ref={scrollContainerRef} className={`step-indicator-row overflow-x-auto scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent ${stepContainerClassName}`} data-lenis-prevent>
           {stepsArray.map((_, index) => {
             const stepNumber = index + 1;
             const isNotLastStep = index < totalSteps - 1;
@@ -167,6 +167,7 @@ function StepContentWrapper({ isCompleted, currentStep, direction, children, cla
     <motion.div
       className={className}
       style={{ position: 'relative', overflow: 'hidden' }}
+      data-lenis-prevent
       animate={{ height: isCompleted ? 0 : parentHeight }}
       transition={{ type: 'spring', duration: 0.4 }}
     >

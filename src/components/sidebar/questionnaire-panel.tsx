@@ -219,10 +219,7 @@ export function QuestionnairePanel({ isOpen, onClose, isCollapsed, setIsCollapse
 
             <div className="flex-1 overflow-hidden min-h-0 flex flex-col relative z-10">
                 {mode === 'result' ? (
-                    <div className="flex flex-col h-full bg-[#f3f3f3] dark:bg-[#0b0b0b] items-center justify-center text-center p-6 w-full">
-                        <div className="bg-[#3388ff]/10 p-6 rounded-full text-[#3388ff] mb-6">
-                            <ListChecks size={48} />
-                        </div>
+                    <div className="flex flex-col h-full items-center justify-center text-center p-6 w-full">
                         <h2 className="text-xl tracking-tight leading-tight font-black mb-4 uppercase">
                             {language === 'cs' ? 'Děkujeme za vyplnění!' : 'Thank you for answering!'}
                         </h2>
@@ -238,7 +235,7 @@ export function QuestionnairePanel({ isOpen, onClose, isCollapsed, setIsCollapse
                             }}
                             className="cursor-pointer px-8 py-3 w-full rounded-full bg-[#3388ff] hover:bg-[#2563eb] text-white font-medium transition-transform transform-gpu duration-300 active:translate-y-px shadow-lg border border-white/10 dark:border-black/10 backdrop-blur-md"
                         >
-                            {language === 'cs' ? 'Pokračovat na mapu' : 'Continue to map'}
+                            {language === 'cs' ? 'Pokračovat' : 'Continue'}
                         </button>
                     </div>
                 ) : mode === 'intro' ? (

@@ -132,7 +132,7 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
             )}
 
             {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-4 relative z-10 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent pr-1">
+            <div className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-4 relative z-10 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent pr-1" data-lenis-prevent>
                 {messages.length === 0 && (
                     <div className="h-full flex flex-col items-center justify-center text-center opacity-50 gap-4 mt-8">
                         <p className="max-w-[200px] text-sm">

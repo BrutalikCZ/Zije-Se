@@ -159,7 +159,7 @@ export function LegalPanel({ isOpen, onClose, type }: LegalPanelProps) {
             showCloseIcon={true}
             hideBackButton={true}
         >
-            <div className="flex flex-col h-full overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent pr-2 relative z-10 w-full pb-20">
+            <div className="flex flex-col h-full overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent pr-2 relative z-10 w-full pb-20" data-lenis-prevent>
                 <div className="text-center shrink-0 mb-6 mt-4">
                     <h1 className="text-2xl font-black uppercase tracking-wider text-white dark:text-black mb-2">
                         {language === 'cs' ? config.titleCs : config.titleEn}
