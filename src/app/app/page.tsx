@@ -63,6 +63,64 @@ export default function AppPage() {
     const [activeHeatmaps, setActiveHeatmaps] = useState<Record<string, boolean>>({});
     const [heatmapData, setHeatmapData] = useState<GeoJSON.FeatureCollection | null>(null);
     const [highlightedTilesData, setHighlightedTilesData] = useState<GeoJSON.FeatureCollection | null>(null);
+    const [questionnaireResultData, setQuestionnaireResultData] = useState<GeoJSON.FeatureCollection | null>(null);
+
+    // Question → category mapping
+    // type: 'positive' = "Ano" means tile gets +1 if it has score in that category
+    // type: 'blacklist' = "Ano" means tile gets blacklisted if it has score in that category
+    const QUESTION_CATEGORY_MAP: Record<number, { category: string; type: 'positive' | 'blacklist' }> = {
+        // Blacklist questions ("Ano" = chci se vyhnout → blacklist tiles that have this)
+        1: { category: 'transportScore', type: 'positive' },   // město vs vesnice → transport proxy
+        2: { category: 'otherScore', type: 'blacklist' },       // záplavy
+        3: { category: 'transportScore', type: 'positive' },    // zastávka MHD
+        4: { category: 'healthcareScore', type: 'positive' },   // nemocnice
+        5: { category: 'educationScore', type: 'positive' },    // škola
+        6: { category: 'transportScore', type: 'blacklist' },   // hluk
+        7: { category: 'otherScore', type: 'blacklist' },       // průmyslové zóny
+        8: { category: 'transportScore', type: 'positive' },    // internet
+        9: { category: 'transportScore', type: 'positive' },    // dostupnost krajského města
+        10: { category: 'otherScore', type: 'blacklist' },      // čisté ovzduší
+        11: { category: 'cultureScore', type: 'positive' },     // ZOO
+        12: { category: 'healthcareScore', type: 'positive' },   // lékárna
+        13: { category: 'cultureScore', type: 'positive' },     // knihovna
+        14: { category: 'transportScore', type: 'positive' },   // letiště
+        15: { category: 'cultureScore', type: 'positive' },     // historické centrum
+        16: { category: 'otherScore', type: 'positive' },       // nezaměstnanost
+        17: { category: 'otherScore', type: 'positive' },       // golf
+        18: { category: 'educationScore', type: 'positive' },   // poradna
+        19: { category: 'otherScore', type: 'blacklist' },      // vlny veder
+        20: { category: 'otherScore', type: 'positive' },       // pivovary
+        21: { category: 'educationScore', type: 'positive' },   // dětské hřiště
+        22: { category: 'otherScore', type: 'positive' },       // přírodní park
+        23: { category: 'otherScore', type: 'positive' },       // supermarkety
+        24: { category: 'cultureScore', type: 'positive' },     // divadla
+        25: { category: 'cultureScore', type: 'positive' },     // botanická zahrada
+        26: { category: 'otherScore', type: 'positive' },       // aquapark
+        27: { category: 'educationScore', type: 'positive' },   // volnočasová střediska
+        28: { category: 'otherScore', type: 'positive' },       // sběrný dvůr
+        29: { category: 'otherScore', type: 'positive' },       // agroturistika
+        30: { category: 'cultureScore', type: 'positive' },     // lanové centrum
+        31: { category: 'educationScore', type: 'positive' },   // střední/VŠ
+        32: { category: 'otherScore', type: 'blacklist' },      // větrná eroze
+        33: { category: 'cultureScore', type: 'positive' },     // hornické památky
+        34: { category: 'otherScore', type: 'blacklist' },      // věznice
+        35: { category: 'cultureScore', type: 'positive' },     // kino
+        36: { category: 'otherScore', type: 'positive' },       // sportoviště
+        37: { category: 'cultureScore', type: 'positive' },     // UNESCO
+        38: { category: 'cultureScore', type: 'positive' },     // hudební kluby
+        39: { category: 'otherScore', type: 'positive' },       // naučné stezky
+        40: { category: 'cultureScore', type: 'positive' },     // muzea/galerie
+        41: { category: 'healthcareScore', type: 'positive' },   // zubař
+        42: { category: 'cultureScore', type: 'positive' },     // hrady/zámky
+        43: { category: 'healthcareScore', type: 'positive' },   // domovy pro seniory
+        44: { category: 'otherScore', type: 'positive' },       // lokální trhy
+        45: { category: 'healthcareScore', type: 'positive' },   // praktický lékař
+        46: { category: 'healthcareScore', type: 'positive' },   // lázně
+        47: { category: 'otherScore', type: 'positive' },       // pošta
+        48: { category: 'otherScore', type: 'positive' },       // lyžařské areály
+        49: { category: 'transportScore', type: 'positive' },   // parkovací zóny
+        50: { category: 'transportScore', type: 'positive' },   // cyklostezky
+    };
 
     // Compute centroid of a polygon (simple average of coordinates)
     const getPolygonCentroid = useCallback((feature: GeoJSON.Feature): [number, number] | null => {
@@ -111,6 +169,94 @@ export default function AppPage() {
             features: nearest.map(n => n.feature)
         });
     }, [heatmapData, getPolygonCentroid]);
+
+    // Evaluate questionnaire answers and build custom heatmap
+    const evaluateQuestionnaire = useCallback(async (answers: Record<number, boolean>) => {
+        // Load tile data if not already loaded
+        let tileData = heatmapData;
+        if (!tileData) {
+            try {
+                const resp = await fetch('/data/tiles_database_final_purged.json');
+                const rawData = await resp.json();
+                const featureList = Array.isArray(rawData) ? rawData : (rawData.features || []);
+                tileData = { type: 'FeatureCollection' as const, features: featureList };
+                setHeatmapData(tileData);
+            } catch (err) {
+                console.error('Chyba při načítání dlaždic pro dotazník:', err);
+                return;
+            }
+        }
+
+        // Collect positive and blacklist questions that user answered "Ano"
+        const positiveQuestions: { index: number; category: string }[] = [];
+        const blacklistQuestions: { index: number; category: string }[] = [];
+
+        for (const [indexStr, answer] of Object.entries(answers)) {
+            const qIndex = parseInt(indexStr, 10);
+            const mapping = QUESTION_CATEGORY_MAP[qIndex + 1]; // questions are 1-indexed in map
+            if (!mapping) continue;
+
+            if (answer === true) {
+                if (mapping.type === 'positive') {
+                    positiveQuestions.push({ index: qIndex, category: mapping.category });
+                } else {
+                    // blacklist type + answer "Ano" = user wants to AVOID this
+                    blacklistQuestions.push({ index: qIndex, category: mapping.category });
+                }
+            }
+        }
+
+        const totalPositive = positiveQuestions.length;
+        if (totalPositive === 0 && blacklistQuestions.length === 0) {
+            // No actionable answers
+            return;
+        }
+
+        // Score each tile
+        const scoredFeatures = tileData.features.map((feature: any) => {
+            const props = feature.properties || {};
+            let blacklisted = false;
+
+            // Check blacklist conditions
+            for (const bq of blacklistQuestions) {
+                const score = props[bq.category] || 0;
+                if (score > 0) {
+                    blacklisted = true;
+                    break;
+                }
+            }
+
+            if (blacklisted) {
+                return {
+                    ...feature,
+                    properties: { ...props, matchPercent: 0 }
+                };
+            }
+
+            // Count positive matches
+            let matches = 0;
+            for (const pq of positiveQuestions) {
+                const score = props[pq.category] || 0;
+                if (score > 0) {
+                    matches++;
+                }
+            }
+
+            const matchPercent = totalPositive > 0
+                ? Math.round((matches / totalPositive) * 100)
+                : 0;
+
+            return {
+                ...feature,
+                properties: { ...props, matchPercent }
+            };
+        });
+
+        setQuestionnaireResultData({
+            type: 'FeatureCollection',
+            features: scoredFeatures
+        });
+    }, [heatmapData]);
 
     const toggleHeatmap = (key: string, value: boolean) => {
         setActiveHeatmaps(prev => ({ ...prev, [key]: value }));
@@ -527,6 +673,7 @@ export default function AppPage() {
                     onClose={() => setIsQuestionnaireOpen(false)}
                     isCollapsed={isCollapsed}
                     setIsCollapsed={setIsCollapsed}
+                    onEvaluate={evaluateQuestionnaire}
                 />
                 <AuthPanel
                     isOpen={isAuthOpen}
@@ -593,6 +740,16 @@ export default function AppPage() {
                             defaultColor="rgba(0, 200, 255, 0.25)"
                             opacity={1}
                             outlineColor="#00e5ff"
+                        />
+                    )}
+                    {questionnaireResultData && (
+                        <MapFillLayer
+                            id="questionnaire-result"
+                            data={questionnaireResultData}
+                            colorProp="matchPercent"
+                            colorScale={HEATMAP_COLOR_SCALE}
+                            defaultColor="rgba(139,0,0,0.8)"
+                            opacity={layerOpacity}
                         />
                     )}
                 </Map>

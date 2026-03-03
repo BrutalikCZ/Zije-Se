@@ -10,6 +10,7 @@ interface QuestionnairePanelProps {
     onClose: () => void;
     isCollapsed: boolean;
     setIsCollapsed: (v: boolean) => void;
+    onEvaluate?: (answers: Record<number, boolean>) => void;
 }
 
 const getQuestions = (lang: 'cs' | 'en') => {
@@ -127,7 +128,7 @@ const getQuestions = (lang: 'cs' | 'en') => {
     });
 };
 
-export function QuestionnairePanel({ isOpen, onClose, isCollapsed, setIsCollapsed }: QuestionnairePanelProps) {
+export function QuestionnairePanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onEvaluate }: QuestionnairePanelProps) {
     const { language } = useLanguage();
     const [mode, setMode] = useState<'intro' | 'questionnaire'>('intro');
     const [answers, setAnswers] = useState<Record<number, boolean>>({});
@@ -169,6 +170,9 @@ export function QuestionnairePanel({ isOpen, onClose, isCollapsed, setIsCollapse
                 console.error("Failed to save data", err);
             }
         }
+
+        // Evaluate questionnaire answers for custom heatmap
+        onEvaluate?.(answers);
 
         setMode('intro');
         setAnswers({});
