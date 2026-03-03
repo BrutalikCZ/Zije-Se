@@ -2,15 +2,15 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
-import { ArrowLeft, BotMessageSquare, ListChecks, PanelLeftClose, PanelLeft, User, Globe, ChevronDown, Layers, Settings2, RotateCcw, X, AlertTriangle, Stethoscope, Bus, Landmark, Dumbbell, GraduationCap, TreePine, Map as MapIcon, Factory, LogOut } from "lucide-react";
+import { ArrowLeft, BotMessageSquare, ListChecks, PanelLeftClose, PanelLeft, Globe, ChevronDown, Settings2, LogOut, User } from "lucide-react";
 import { useLanguage } from "@/components/providers/language-provider";
 import { Logo } from "@/components/logo";
 import { ModeToggle } from "@/components/mode-toggle";
 import { Map, MapControls, MapFillLayer } from "@/components/map/map";
 import { LegacyLayers } from "@/components/map/legacy-layers";
-import { QuestionnairePanel, SettingsPanel, AIChatPanel, AiSettingsPanel, AuthPanel } from "@/components/sidebar";
+import { QuestionnairePanel, SettingsPanel, AIChatPanel, AiSettingsPanel, AuthPanel, RegionDataPanel } from "@/components/sidebar";
+import { ALL_REGIONS, getRegionLabel } from "@/lib/data-mapping";
 import { useAuth } from "@/components/providers/auth-provider";
-import * as turf from '@turf/centroid';
 
 export default function AppPage() {
     const { user, logout } = useAuth();
@@ -39,9 +39,14 @@ export default function AppPage() {
     const [layerOpacity, setLayerOpacity] = useState(0.8);
     const [mapOpacity, setMapOpacity] = useState(1.0);
 
-    const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({});
+    const [globalData, setGlobalData] = useState<Record<string, Record<string, string[]>>>({});
     const [activeLayers, setActiveLayers] = useState<Record<string, boolean>>({});
-    const [files, setFiles] = useState<string[]>([]);
+
+    const [activeRegionPanel, setActiveRegionPanel] = useState<string | null>(null);
+
+    const toggleLayer = (layerPath: string, value: boolean) => {
+        setActiveLayers(prev => ({ ...prev, [layerPath]: value }));
+    };
 
     // Per-category heatmap toggles
     const HEATMAP_CATEGORIES = [
@@ -76,6 +81,7 @@ export default function AppPage() {
     // Compute centroid of a polygon (simple average of coordinates)
     const getPolygonCentroid = useCallback((feature: GeoJSON.Feature): [number, number] | null => {
         try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const geom = feature.geometry as any;
             if (!geom || !geom.coordinates) return null;
             const coords = geom.coordinates[0] as [number, number][];
@@ -141,8 +147,8 @@ export default function AppPage() {
         fetch(`/api/files?t=${Date.now()}`)
             .then(r => r.json())
             .then(data => {
-                if (Array.isArray(data)) {
-                    setFiles(data);
+                if (data && typeof data === 'object' && !Array.isArray(data)) {
+                    setGlobalData(data);
                 }
             })
             .catch(err => console.error("Chyba při načítání souborů:", err));
@@ -156,47 +162,7 @@ export default function AppPage() {
         setActiveHeatmaps(newHeatmaps);
     };
 
-    const CATEGORY_MAP: Record<string, string[]> = {
-        "Povodně a Rizika": ["záplavové", "zranitelnost"],
-        "Zdravotnictví": ["lékař", "nemocnice", "ústav", "lázně", "zubní"],
-        "Doprava": ["autobus", "železniční", "silnic"],
-        "Kultura a Historie": ["divadl", "muze", "hrad", "památk", "knihovn", "galerie"],
-        "Sport a Volný čas": ["golf", "zoo", "klub", "festival", "domov", "středisk"],
-        "Vzdělávání": ["škol"],
-        "Příroda": ["parky", "rezervace", "úses"],
-        "Administrativa a Hranice": ["hranice", "členění", "adresář"],
-        "Byznys a Průmysl": ["firmy", "infrastruktur", "pobídk", "klastr", "průmyslov", "kontejner"],
-    };
 
-    const categorizedFiles = useMemo(() => {
-        const result: Record<string, string[]> = {
-            "Ostatní": []
-        };
-
-        // Initialize all categories defined in CATEGORY_MAP
-        Object.keys(CATEGORY_MAP).forEach(cat => {
-            result[cat] = [];
-        });
-
-        files.forEach(file => {
-            let matched = false;
-            const lowerFile = file.toLowerCase();
-            for (const [cat, keywords] of Object.entries(CATEGORY_MAP)) {
-                if (keywords.some(kw => lowerFile.includes(kw))) {
-                    result[cat].push(file);
-                    matched = true;
-                    break;
-                }
-            }
-            if (!matched) result["Ostatní"].push(file);
-        });
-
-        const finalResult: Record<string, string[]> = {};
-        for (const [cat, items] of Object.entries(result)) {
-            if (items.length > 0) finalResult[cat] = items;
-        }
-        return finalResult;
-    }, [files]);
 
     // Base map styles
     const mapStyleProp = useMemo(() => {
@@ -219,6 +185,7 @@ export default function AppPage() {
                     maxzoom: 22
                 }]
             };
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             return { light: style as any, dark: style as any };
         }
         if (mapType === 'osm') {
@@ -240,6 +207,7 @@ export default function AppPage() {
                     maxzoom: 19
                 }]
             };
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             return { light: style as any, dark: style as any };
         }
         if (mapType === 'katastr') {
@@ -276,6 +244,7 @@ export default function AppPage() {
                     }
                 ]
             };
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             return { light: style as any, dark: style as any };
         }
         return undefined; // Let maplibre component use default dark/light Carto
@@ -285,6 +254,7 @@ export default function AppPage() {
         if (anyHeatmapActive && !heatmapData) {
             fetch('/data/tiles_database_final_purged.json')
                 .then(r => r.json())
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 .then((data: any) => {
                     const featureList = Array.isArray(data) ? data : (data.features || []);
                     setHeatmapData({
@@ -378,88 +348,41 @@ export default function AppPage() {
 
                         <div className="h-px w-full bg-white/10 dark:bg-black/10 shrink-0 my-0"></div>
 
-                        <div className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-2 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent pr-1" data-lenis-prevent>
-                            {Object.keys(categorizedFiles).length === 0 ? (
-                                <div className="text-xs opacity-50 py-2 pl-2">
-                                    {files.length === 0 ? (language === 'cs' ? "Žádné vrstvy nebyly nalezeny..." : "No layers found...") : (language === 'cs' ? "Načítám vrstvy..." : "Loading layers...")}
+                        <div className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-2 pr-1" data-lenis-prevent>
+                            {Object.keys(globalData).length === 0 ? (
+                                <div className="text-xs opacity-50 py-2 pl-2 text-center mt-4">
+                                    {language === 'cs' ? "Načítám data..." : "Loading data..."}
                                 </div>
                             ) : (
-                                Object.entries(categorizedFiles).map(([category, items]) => {
-                                    return (
-                                        <div key={category} className="flex flex-col">
+                                <>
+                                    {ALL_REGIONS.map((region) => {
+                                        const hasData = globalData[region.id] && Object.values(globalData[region.id]).some(cats => cats.length > 0);
+                                        return (
                                             <button
-                                                onClick={() => {
-                                                    if (isCollapsed) setIsCollapsed(false);
-                                                    setOpenCategories(prev => ({ ...prev, [category]: !prev[category] }));
-                                                }}
-                                                className={`outline-none focus:outline-none focus:ring-0 cursor-pointer flex items-center justify-between transition-all transform-gpu duration-300 ease-in-out active:translate-y-px ${isCollapsed
+                                                key={region.id}
+                                                onClick={() => hasData && setActiveRegionPanel(region.id)}
+                                                disabled={!hasData}
+                                                className={`group outline-none focus:outline-none focus:ring-0 flex items-center justify-between transition-all transform-gpu duration-300 ease-in-out ${!hasData ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer active:translate-y-px'} ${isCollapsed
                                                     ? "h-12 w-12 mx-auto rounded-full bg-[#1a1a1a] dark:bg-[#ececeb] text-white dark:text-black hover:bg-[#262626] dark:hover:bg-[#dcdcdc] border border-white/10 dark:border-black/10 backdrop-blur-md"
                                                     : "gap-3 px-5 py-3 w-full text-sm font-medium rounded-full bg-[#1a1a1a] dark:bg-[#ececeb] text-white dark:text-black hover:bg-[#262626] dark:hover:bg-[#dcdcdc] border border-white/10 dark:border-black/10 backdrop-blur-md"
                                                     }`}
-                                                title={language === 'cs' ? category : {
-                                                    "Povodně a Rizika": "Floods & Risks",
-                                                    "Zdravotnictví": "Healthcare",
-                                                    "Doprava": "Transport",
-                                                    "Kultura a Historie": "Culture & History",
-                                                    "Sport a Volný čas": "Sports & Leisure",
-                                                    "Vzdělávání": "Education",
-                                                    "Příroda": "Nature",
-                                                    "Administrativa a Hranice": "Administration & Borders",
-                                                    "Byznys a Průmysl": "Business & Industry",
-                                                    "Ostatní": "Other"
-                                                }[category] || category}
+                                                title={!hasData ? (language === 'cs' ? 'Prázdný' : 'Empty') : region.label}
                                             >
-                                                <div className="flex items-center gap-3 w-full">
+                                                <div className="flex items-center gap-3 w-full relative overflow-hidden">
                                                     {!isCollapsed ? (
                                                         <span className="flex-1 text-left truncate">
-                                                            {language === 'cs' ? category : {
-                                                                "Povodně a Rizika": "Floods & Risks",
-                                                                "Zdravotnictví": "Healthcare",
-                                                                "Doprava": "Transport",
-                                                                "Kultura a Historie": "Culture & History",
-                                                                "Sport a Volný čas": "Sports & Leisure",
-                                                                "Vzdělávání": "Education",
-                                                                "Příroda": "Nature",
-                                                                "Administrativa a Hranice": "Administration & Borders",
-                                                                "Byznys a Průmysl": "Business & Industry",
-                                                                "Ostatní": "Other"
-                                                            }[category] || category}
+                                                            {region.label}
                                                         </span>
                                                     ) : (
-                                                        <span className="mx-auto text-xs font-bold uppercase truncate max-w-full px-1">
-                                                            {category.substring(0, 3)}
+                                                        <span className="mx-auto text-[10px] font-bold uppercase truncate max-w-full px-1 leading-none">
+                                                            {region.label.substring(0, 3)}
                                                         </span>
                                                     )}
                                                 </div>
-                                                {!isCollapsed && (
-                                                    <ChevronDown size={16} className={`shrink-0 transition-transform duration-200 ${openCategories[category] ? "rotate-180" : ""}`} />
-                                                )}
                                             </button>
-
-                                            {openCategories[category] && !isCollapsed && (
-                                                <div className="flex flex-col mt-1 pl-0">
-                                                    {items.map((file) => (
-                                                        <label key={file} className="flex items-center gap-3 cursor-pointer py-1.5 px-1">
-                                                            <div className="relative flex items-center shrink-0">
-                                                                <input
-                                                                    type="checkbox"
-                                                                    className="sr-only"
-                                                                    checked={!!activeLayers[file]}
-                                                                    onChange={(e) => setActiveLayers(prev => ({ ...prev, [file]: e.target.checked }))}
-                                                                />
-                                                                <div className={`w-10 h-6 rounded-full transition-colors ${activeLayers[file] ? 'bg-[#3388ff]' : 'bg-white/10 dark:bg-black/10'}`}></div>
-                                                                <div className={`absolute w-4 h-4 bg-white dark:bg-[#0b0b0b] rounded-full left-1 top-1 transition-transform ${activeLayers[file] ? 'translate-x-4' : ''}`}></div>
-                                                            </div>
-                                                            <span className="text-sm font-medium truncate" title={file}>
-                                                                {file.replace('.geojson', '').replace(/_/g, ' ')}
-                                                            </span>
-                                                        </label>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })
+                                        )
+                                    })}
+                                </>
                             )}
                         </div>
                     </nav>
@@ -591,6 +514,16 @@ export default function AppPage() {
                     setIsCollapsed={setIsCollapsed}
                 />
 
+                <RegionDataPanel
+                    isOpen={!!activeRegionPanel}
+                    onClose={() => setActiveRegionPanel(null)}
+                    regionId={activeRegionPanel || ''}
+                    regionName={activeRegionPanel ? getRegionLabel(activeRegionPanel) : ''}
+                    regionData={activeRegionPanel && globalData[activeRegionPanel] ? globalData[activeRegionPanel] : {}}
+                    activeLayers={activeLayers}
+                    toggleLayer={toggleLayer}
+                />
+
                 <SettingsPanel
                     isOpen={isSettingsOpen}
                     onClose={() => setIsSettingsOpen(false)}
@@ -617,6 +550,7 @@ export default function AppPage() {
                 <Map
                     center={[15.4730, 49.8175]}
                     zoom={6.5}
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     styles={mapStyleProp as any}
                 >
                     <MapControls position="bottom-right" showZoom showCompass />
