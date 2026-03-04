@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Send, Loader2, Info, BotMessageSquare, Settings2, Lock } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Send, Loader2, Info, BotMessageSquare, Settings2, Lock, Check, Trash2 } from 'lucide-react';
 import { useLanguage } from '@/components/providers/language-provider';
 import { useAuth } from '@/components/providers/auth-provider';
 import { SidebarLayout } from './sidebar-layout';
@@ -10,21 +10,43 @@ interface AIChatPanelProps {
     isCollapsed: boolean;
     setIsCollapsed: (v: boolean) => void;
     onOpenAiSettings: () => void;
-    onLoginClick: () => void;
 }
 
 interface Message {
-    role: 'user' | 'ai' | 'system';
+    role: 'user' | 'assistant' | 'system';
     content: string;
 }
 
-export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOpenAiSettings, onLoginClick }: AIChatPanelProps) {
+interface ThinkingStep {
+    text: string;
+    done: boolean;
+}
+
+const MAX_HISTORY_PAIRS = 10;
+
+function extract_json(text: string): any {
+    try { return JSON.parse(text.trim()); } catch {}
+    const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (fence) { try { return JSON.parse(fence[1].trim()); } catch {} }
+    const obj = text.match(/\{[\s\S]*\}/);
+    if (obj) { try { return JSON.parse(obj[0]); } catch {} }
+    return null;
+}
+
+const SYSTEM_PROMPT =
+    'Jsi inteligentní asistent pro analýzu míst a lokalit v České republice. ' +
+    'Pokud ti jsou poskytnuta geodata z databáze, využij je ve své odpovědi – uveď konkrétní místa, názvy obcí nebo zařízení. ' +
+    'Pokud geodata nejsou k dispozici nebo nejsou relevantní, odpovídej na základě obecných znalostí. ' +
+    'Odpovídej vždy v jazyce uživatele.';
+
+export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOpenAiSettings }: AIChatPanelProps) {
     const { language } = useLanguage();
     const { user } = useAuth();
     const isLoggedIn = !!user;
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [thinkingSteps, setThinkingSteps] = useState<ThinkingStep[]>([]);
     const [contextNote, setContextNote] = useState<string | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -43,51 +65,173 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
                 setContextNote(`Aktualizován kontext na dlaždici: ${state.id}`);
                 setMessages(prev => [...prev, {
                     role: 'system',
-                    content: `AI context updated to Tile ${state.id}`
+                    content: `AI context updated to Tile ${state.id}`,
                 }]);
             }
         };
-
         window.addEventListener('tileContextUpdated', handleContextUpdate);
         return () => window.removeEventListener('tileContextUpdated', handleContextUpdate);
     }, []);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages, contextNote]);
+    }, [messages, thinkingSteps, contextNote]);
 
-    const handleSend = async () => {
-        if (!input.trim() || isLoading) return;
+    const build_API_messages = (conversation_history: Message[]) => {
+        const api_messages: { role: string; content: string }[] = [
+            { role: 'system', content: SYSTEM_PROMPT },
+        ];
 
-        const userMsg = input.trim();
-        setInput('');
-        setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
-        setIsLoading(true);
-
-        let prompt = userMsg;
-        const tileCtx = (window as any).CurrentTileContext;
-        if (tileCtx) {
-            prompt = `Kontext dlaždice: ${JSON.stringify(tileCtx)}. Uživatelský dotaz: ${userMsg}`;
+        const tile_context = (window as any).CurrentTileContext;
+        if (tile_context) {
+            api_messages.push({
+                role: 'system',
+                content: `Kontext aktuální dlaždice na mapě: ${JSON.stringify(tile_context)}`,
+            });
         }
 
+        const chat_only = conversation_history.filter(m => m.role !== 'system');
+        const trimmed = chat_only.slice(-MAX_HISTORY_PAIRS * 2);
+        for (const message of trimmed) {
+            api_messages.push({ role: message.role, content: message.content });
+        }
+
+        return api_messages;
+    };
+
+    const advanceStep = (text: string) => {
+        setThinkingSteps(prev => [
+            ...prev.map(s => ({ ...s, done: true })),
+            { text, done: false },
+        ]);
+    };
+
+    const handle_send = async () => {
+        if (!input.trim() || isLoading) return;
+
+        const userMessage = input.trim();
+        setInput('');
+
+        const updatedMessages: Message[] = [...messages, { role: 'user', content: userMessage }];
+        setMessages(updatedMessages);
+        setIsLoading(true);
+        setThinkingSteps([{
+            text: language === 'cs' ? 'Analyzuji požadavky...' : 'Analyzing requirements...',
+            done: false,
+        }]);
+
         try {
-            const response = await fetch('/api/chat', {
+            let selectedFiles: string[] = [];
+
+            try {
+                const indexRes = await fetch('/api/geojson-index');
+                if (indexRes.ok) {
+                    const { files: geoFiles } = await indexRes.json();
+
+                    const fileListStr = (geoFiles as { path: string }[])
+                        .slice(0, 150)
+                        .map(f => f.path)
+                        .join('\n');
+
+                    const selectionMessages = [
+                        {
+                            role: 'system',
+                            content:
+                                'Odpovídej POUZE validním JSON objektem bez markdownu, uvozovek nebo jiného textu kolem.',
+                        },
+                        {
+                            role: 'user',
+                            content:
+                                `Dotaz uživatele: "${userMessage}"\n\n` +
+                                `Dostupné GeoJSON soubory (každý reprezentuje určitý typ geodat):\n${fileListStr}\n\n` +
+                                `Vyber 0–5 souborů, které mohou být relevantní pro zodpovězení dotazu. ` +
+                                `Vrať JSON ve formátu: {"selectedFiles": ["relativni/cesta.geojson"]}`,
+                        },
+                    ];
+
+                    const selRes = await fetch('/api/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ messages: selectionMessages }),
+                    });
+
+                    if (selRes.ok) {
+                        const selData = await selRes.json();
+                        const parsed = extract_json(selData.reply || '');
+                        if (parsed) {
+                            selectedFiles = Array.isArray(parsed.selectedFiles)
+                                ? (parsed.selectedFiles as string[]).slice(0, 5)
+                                : [];
+                        }
+                    }
+                }
+            } catch {
+                // Ignore please
+            }
+
+            let geoContext = '';
+
+            if (selectedFiles.length > 0) {
+                advanceStep(language === 'cs' ? 'Prohledávám databázi lokalit...' : 'Searching location database...',);
+
+                try {
+                    const searchRes = await fetch('/api/geojson-search', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ filePaths: selectedFiles }),
+                    });
+
+                    if (searchRes.ok) {
+                        const { features } = await searchRes.json();
+                        if (Array.isArray(features) && features.length > 0) {
+                            geoContext =
+                                `Relevantní geodata nalezená v databázi:\n` +
+                                JSON.stringify(features.slice(0, 15), null, 2);
+                        }
+                    }
+                } catch {
+                    // Ignore please
+                }
+            }
+
+            advanceStep(language === 'cs' ? 'Formuluji odpověď...' : 'Formulating response...',);
+
+            const apiMessages = build_API_messages(updatedMessages);
+
+            if (geoContext) {
+                apiMessages.splice(1, 0, { role: 'system', content: geoContext });
+            }
+
+            const finalRes = await fetch('/api/chat', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ prompt }),
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ messages: apiMessages }),
             });
 
-            if (!response.ok) throw new Error('Network error');
+            if (!finalRes.ok) throw new Error('Network error');
 
-            const data = await response.json();
-            setMessages(prev => [...prev, { role: 'ai', content: data.reply || "Error: prázdná odpověď" }]);
+            const finalData = await finalRes.json();
+            setMessages(prev => [
+                ...prev,
+                {
+                    role: 'assistant',
+                    content: finalData.reply || (language === 'cs' ? 'Chyba: prázdná odpověď.' : 'Error: empty response.'),
+                },
+            ]);
         } catch (error) {
             console.error(error);
-            setMessages(prev => [...prev, { role: 'system', content: 'Chyba při komunikaci s AI.' }]);
+            setMessages(prev => [
+                ...prev,
+                {
+                    role: 'system',
+                    content: language === 'cs'
+                        ? 'Chyba při komunikaci s AI.'
+                        : 'Error communicating with AI.',
+                },
+            ]);
         } finally {
             setIsLoading(false);
+            setThinkingSteps([]);
         }
     };
 
@@ -111,19 +255,32 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
             collapsedIcon={<BotMessageSquare size={20} />}
             collapsedIconTitle="Zije!Se AI"
             extraBottomControls={aiSettingsButton}
-            onLoginClick={onLoginClick}
         >
+            {/* Header */}
             <div className="text-center shrink-0 mb-6 mt-4">
-                <h1 className="text-2xl font-black uppercase tracking-wider text-white dark:text-black mb-2">
-                    {language === 'cs' ? 'ZIJE!SE AI' : 'ZIJE!SE AI'}
-                </h1>
+                <div className="flex items-center justify-center gap-3 mb-2">
+                    <h1 className="text-2xl font-black uppercase tracking-wider text-white dark:text-black">
+                        {language === 'cs' ? 'ZIJE!SE AI' : 'ZIJE!SE AI'}
+                    </h1>
+                    {messages.length > 0 && !isLoading && (
+                        <button
+                            onClick={() => { setMessages([]); setContextNote(null); }}
+                            className="flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded-full bg-white/5 dark:bg-black/5 text-white/50 dark:text-black/50 hover:bg-red-500/10 hover:text-red-400 dark:hover:text-red-500 transition-colors border border-white/10 dark:border-black/10"
+                            title={language === 'cs' ? 'Vymazat historii' : 'Clear history'}
+                        >
+                            <Trash2 size={11} />
+                            {language === 'cs' ? 'Vymazat' : 'Clear'}
+                        </button>
+                    )}
+                </div>
                 <p className="text-xs text-gray-400 dark:text-gray-500 mb-4 px-2">
-                    {language === 'cs' ? 'Inteligentní asistent pro analýzu míst a lokalit' : 'Intelligent assistant for analyzing places and locations'}
+                    {language === 'cs'
+                        ? 'Inteligentní asistent pro analýzu míst a lokalit'
+                        : 'Intelligent assistant for analyzing places and locations'}
                 </p>
                 <div className="h-px w-full bg-white/10 dark:bg-black/10"></div>
             </div>
 
-            {/* Context Note */}
             {contextNote && (
                 <div className="py-2 text-[#3388ff] text-xs font-medium flex items-center gap-2 shrink-0 relative z-10">
                     <Info size={14} />
@@ -131,9 +288,9 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
                 </div>
             )}
 
-            {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-4 relative z-10 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent pr-1" data-lenis-prevent>
-                {messages.length === 0 && (
+            {/* Message list */}
+            <div className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-4 relative z-10 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent pr-1">
+                {messages.length === 0 && !isLoading && (
                     <div className="h-full flex flex-col items-center justify-center text-center opacity-50 gap-4 mt-8">
                         <p className="max-w-[200px] text-sm">
                             {language === 'cs'
@@ -146,8 +303,11 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
                 {messages.map((msg, i) => (
                     <div
                         key={i}
-                        className={`flex ${msg.role === 'user' ? 'justify-end' :
-                            msg.role === 'system' ? 'justify-center' : 'justify-start'
+                        className={`flex ${msg.role === 'user'
+                            ? 'justify-end'
+                            : msg.role === 'system'
+                                ? 'justify-center'
+                                : 'justify-start'
                             }`}
                     >
                         {msg.role === 'system' ? (
@@ -167,18 +327,42 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
                     </div>
                 ))}
 
+                {/* Thinking steps indicator */}
                 {isLoading && (
                     <div className="flex justify-start">
-                        <div className="bg-[#1a1a1a] dark:bg-[#ececeb] text-white dark:text-black rounded-2xl px-4 py-2 border border-white/10 dark:border-black/10 flex items-center gap-2">
-                            <Loader2 className="animate-spin text-[#3388ff]" size={16} />
-                            <span className="text-xs opacity-60">AI přemýšlí...</span>
+                        <div className="bg-[#1a1a1a] dark:bg-[#ececeb] text-white dark:text-black rounded-2xl px-4 py-3 border border-white/10 dark:border-black/10 min-w-[180px]">
+                            {thinkingSteps.length === 0 ? (
+                                <div className="flex items-center gap-2">
+                                    <Loader2 className="animate-spin text-[#3388ff] shrink-0" size={14} />
+                                    <span className="text-xs opacity-60">
+                                        {language === 'cs' ? 'AI přemýšlí...' : 'AI is thinking...'}
+                                    </span>
+                                </div>
+                            ) : (
+                                <div className="flex flex-col gap-1.5">
+                                    {thinkingSteps.map((step, i) => (
+                                        <div
+                                            key={i}
+                                            className={`flex items-center gap-2 text-xs transition-opacity ${step.done ? 'opacity-35' : 'opacity-100'}`}
+                                        >
+                                            {step.done ? (
+                                                <Check size={12} className="text-green-400 shrink-0" />
+                                            ) : (
+                                                <Loader2 size={12} className="animate-spin text-[#3388ff] shrink-0" />
+                                            )}
+                                            <span>{step.text}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}
+
                 <div ref={messagesEndRef} />
             </div>
 
-            {/* Chat Input */}
+            {/* Input area */}
             <div className="relative z-10 shrink-0 mt-3 mb-2 group">
                 {!isLoggedIn && (
                     <div className="text-center text-[11px] text-[#3388ff]/70 mb-2 font-medium">
@@ -189,12 +373,14 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
                     <input
                         type="text"
                         value={input}
-                        disabled={!isLoggedIn}
+                        disabled={!isLoggedIn || isLoading}
                         onChange={(e) => setInput(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                        placeholder={language === 'cs'
-                            ? (isLoggedIn ? 'Zeptejte se AI...' : 'Přihlaste se pro chat...')
-                            : (isLoggedIn ? 'Ask AI...' : 'Log in to chat...')}
+                        onKeyDown={(e) => e.key === 'Enter' && handle_send()}
+                        placeholder={
+                            language === 'cs'
+                                ? (isLoggedIn ? 'Zeptejte se AI...' : 'Přihlaste se pro chat...')
+                                : (isLoggedIn ? 'Ask AI...' : 'Log in to chat...')
+                        }
                         className={`w-full bg-[#1a1a1a] dark:bg-[#ececeb] text-white dark:text-black border rounded-full pl-4 pr-12 py-3 transition-all text-sm backdrop-blur-md ${isLoggedIn
                             ? 'border-white/10 dark:border-black/10 opacity-100 cursor-text focus:border-[#3388ff]/50 focus:ring-1 focus:ring-[#3388ff]/20 focus:outline-none'
                             : 'border-white/10 dark:border-black/10 opacity-50 cursor-not-allowed group-hover:border-[#3388ff]/30'
@@ -203,7 +389,7 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
 
                     {isLoggedIn ? (
                         <button
-                            onClick={handleSend}
+                            onClick={handle_send}
                             disabled={!input.trim() || isLoading}
                             className={`absolute right-1.5 w-8 h-8 flex items-center justify-center rounded-full transition-all cursor-pointer ${input.trim() && !isLoading
                                 ? 'bg-[#3388ff] text-white hover:bg-[#2563eb] scale-100 active:scale-90'
