@@ -1,48 +1,70 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from "next/server";
 
-const OLLAMA_API_URL = "http://localhost:11434/api/generate";
-const DEFAULT_MODEL = "gpt-oss:latest";
+function normalise_url(raw: string): string {
+    let url = raw.replace(/^https?:\/\//i, "");
+    const isTcp = /^tcp\./i.test(url);
+    return `${isTcp ? "http" : "https"}://${url}`;
+}
+
+const OLLAMA_URL = normalise_url(process.env.OLLAMA_URL || "http://localhost:11434/api/chat");
+const DEFAULT_MODEL = process.env.DEFAULT_MODEL || "gemma3:27b";
+
+async function call_ollama(messages: { role: string; content: string }[], model: string): Promise<string> {
+    console.log(`[AI] Calling Ollama at: ${OLLAMA_URL}`);
+
+    const response = await fetch(OLLAMA_URL, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": "ZijeSe/1.0",
+            "ngrok-skip-browser-warning": "true",
+        },
+        body: JSON.stringify({ model, messages, stream: false }),
+    });
+
+    if (!response.ok) {
+        const body = await response.text();
+        if (response.status === 403) {
+            throw new Error(
+                `ngrok 403 — tunel expiroval nebo vyžaduje autentizaci. Body: "${body}"`
+            );
+        }
+        throw new Error(`Ollama error ${response.status}: ${body}`);
+    }
+
+    const json = await response.json();
+    return json.message?.content ?? "";
+}
 
 export async function POST(request: NextRequest) {
     try {
         const data = await request.json();
 
-        const fullPrompt = data.prompt || '';
+        const messages: { role: string; content: string }[] = data.messages || [];
         const model = data.model || DEFAULT_MODEL;
 
-        console.log("\n" + "============================================================");
-        console.log(`[AI DEBUG] Incoming Request (Model: ${model})`);
-        console.log("------------------------------------------------------------");
-        console.log(fullPrompt);
-        console.log("------------------------------------------------------------");
-        console.log("waiting for ollama...\n");
-
-        const ollamaPayload = {
-            model: model,
-            prompt: fullPrompt,
-            stream: false
-        };
-
-        const response = await fetch(OLLAMA_API_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(ollamaPayload)
-        });
-
-        if (!response.ok) {
-            throw new Error(`Ollama API responded with status: ${response.status}`);
+        if (data.prompt && messages.length === 0) {
+            messages.push({ role: "user", content: data.prompt });
         }
 
-        const ollamaResponse = await response.json();
-        const replyText = ollamaResponse.response || '';
+        console.log("\n" + "=".repeat(60));
+        console.log(`[AI] Model: ${model} | Messages: ${messages.length}`);
+        messages.forEach((msg, i) => {
+            console.log(`  [${i}] ${msg.role}: ${msg.content.substring(0, 120)}...`);
+        });
+        console.log("-".repeat(60));
 
-        console.log(`[AI DEBUG] Response sent (${replyText.length} chars).`);
+        const reply = await call_ollama(messages, model);
 
-        return NextResponse.json({ reply: replyText });
+        console.log(`[AI] Reply: ${reply.length} chars`);
+
+        return NextResponse.json({ reply });
     } catch (error: any) {
-        console.error("AI Proxy Error:", error);
-        return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 });
+        console.error("[AI] Error:", error);
+        return NextResponse.json(
+            { error: error.message || "Internal Server Error" },
+            { status: 500 }
+        );
     }
 }
