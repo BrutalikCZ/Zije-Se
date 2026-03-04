@@ -6,7 +6,7 @@ function normalise_url(raw: string): string {
     return `${isTcp ? "http" : "https"}://${url}`;
 }
 
-const OLLAMA_URL = normalise_url(process.env.OLLAMA_URL || "http://localhost:11434/api/chat");
+const OLLAMA_URL = normalise_url(process.env.OLLAMA_URL || "http://25.33.254.156:11434/api/chat");
 const DEFAULT_MODEL = process.env.DEFAULT_MODEL || "gemma3:27b";
 
 async function call_ollama(messages: { role: string; content: string }[], model: string): Promise<string> {
