@@ -4,23 +4,14 @@ import { useEffect, useId, useRef } from "react";
 import { useMap } from "./map";
 
 export type MapHeatmapLayerProps = {
-    /** Optional unique identifier for the heatmap layer */
     id?: string;
-    /** GeoJSON FeatureCollection data or URL to fetch GeoJSON from */
     data: string | GeoJSON.FeatureCollection<GeoJSON.Point>;
-    /** Property name in GeoJSON to use for heatmap weight (0-1). Overrides the `weight` prop if set. */
     weightProp?: string;
-    /** Heatmap weight expression or value (default: 1) */
     weight?: number | any[];
-    /** Heatmap intensity expression or value (default: 1) */
     intensity?: number | any[];
-    /** Heatmap radius in pixels (default: 30) */
     radius?: number | any[];
-    /** Heatmap opacity from 0 to 1 (default: 1) */
     opacity?: number | any[];
-    /** Array of colors for the heatmap gradient, from 0 to 1 */
     colors?: string[];
-    /** Layer ID before which this layer should be inserted (to place under labels) */
     beforeId?: string;
 };
 
@@ -52,18 +43,15 @@ export function MapHeatmapLayer({
 
     const stylePropsRef = useRef({ colors, radius, opacity, intensity, weight, weightProp });
 
-    // Add source and layer on mount
     useEffect(() => {
         if (!isLoaded || !map) return;
 
-        // Prepare color ramp (discrete steps, no interpolation)
         const colorRamp: any[] = ["step", ["heatmap-density"], colors[0]];
         const stepSize = 1 / (colors.length - 1);
         for (let i = 1; i < colors.length; i++) {
             colorRamp.push(i * stepSize, colors[i]);
         }
 
-        // Determine weight expression
         let heatmapWeight: any = weight;
         if (weightProp) {
             heatmapWeight = ["get", weightProp];
@@ -99,13 +87,11 @@ export function MapHeatmapLayer({
                 if (map.getLayer(layerId)) map.removeLayer(layerId);
                 if (map.getSource(sourceId)) map.removeSource(sourceId);
             } catch {
-                // ignore
+                // Please ignore
             }
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isLoaded, map, sourceId, layerId]);
 
-    // Update source data when data prop changes
     useEffect(() => {
         if (!isLoaded || !map || typeof data === "string") return;
 
@@ -115,7 +101,6 @@ export function MapHeatmapLayer({
         }
     }, [isLoaded, map, data, sourceId]);
 
-    // Update layer styles when props change
     useEffect(() => {
         if (!isLoaded || !map || !map.getLayer(layerId)) return;
 
