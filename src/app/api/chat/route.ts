@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 
 const OLLAMA_URL = "http://localhost:11434/api/chat";
-const DEFAULT_MODEL = "";
+const DEFAULT_MODEL = "gemma3:27b";
 const OLLAMA_TIMEOUT_MS = 10 * 60 * 1000;
 
 interface ChatMessage {
