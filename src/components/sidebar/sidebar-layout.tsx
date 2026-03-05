@@ -114,7 +114,7 @@ export function SidebarLayout({
                     {collapsedIcon && (
                         <button
                             onClick={() => setIsCollapsed(false)}
-                            className="h-12 w-12 flex items-center justify-center rounded-full bg-[#3388ff] text-white hover:bg-[#2563eb] cursor-pointer shadow-lg transition-transform hover:scale-105 active:scale-95"
+                            className="h-12 w-12 mx-auto rounded-full bg-[#1a1a1a] dark:bg-[#ececeb] text-white dark:text-black hover:bg-[#222222] dark:hover:bg-[#dcdcdc] border border-white/10 dark:border-black/10 flex items-center justify-center transition-all transform-gpu duration-300 ease-in-out cursor-pointer active:translate-y-px"
                             title={collapsedIconTitle}
                         >
                             {collapsedIcon}

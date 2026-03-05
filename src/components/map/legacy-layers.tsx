@@ -75,7 +75,7 @@ export function LegacyLayers({
 
                 return new GeoJsonLayer({
                     id: `geojson-${filename}`,
-                    data: `/data/${filename}`,
+                    data: `/data/${filename.split('?')[0]}`,
 
                     // Style config
                     filled: showFills,

@@ -2,13 +2,13 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
-import { ArrowLeft, BotMessageSquare, ListChecks, PanelLeftClose, PanelLeft, Globe, ChevronDown, Settings2, LogOut, User } from "lucide-react";
+import { ArrowLeft, BotMessageSquare, ListChecks, PanelLeftClose, PanelLeft, Globe, ChevronDown, Settings2, LogOut, User, MapPin, Database } from "lucide-react";
 import { useLanguage } from "@/components/providers/language-provider";
 import { Logo } from "@/components/logo";
 import { ModeToggle } from "@/components/mode-toggle";
 import { Map, MapControls, MapFillLayer } from "@/components/map/map";
 import { LegacyLayers } from "@/components/map/legacy-layers";
-import { QuestionnairePanel, SettingsPanel, AIChatPanel, AiSettingsPanel, AuthPanel, RegionDataPanel } from "@/components/sidebar";
+import { QuestionnairePanel, SettingsPanel, AIChatPanel, AiSettingsPanel, AuthPanel, RegionDataPanel, DatasetsPanel } from "@/components/sidebar";
 import { ALL_REGIONS, getRegionLabel } from "@/lib/data-mapping";
 import { useAuth } from "@/components/providers/auth-provider";
 
@@ -22,6 +22,7 @@ export default function AppPage() {
 
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isAiSettingsOpen, setIsAiSettingsOpen] = useState(false);
+    const [isDatasetsOpen, setIsDatasetsOpen] = useState(false);
 
     // Auth Panel Toggle Exposed for nested components
     const openAuthPanel = () => {
@@ -29,6 +30,7 @@ export default function AppPage() {
         setIsChatOpen(false);
         setIsSettingsOpen(false);
         setIsAiSettingsOpen(false);
+        setIsDatasetsOpen(false);
         setIsAuthOpen(true);
     };
 
@@ -276,7 +278,7 @@ export default function AppPage() {
             <div className={`relative h-full shrink-0 transition-all duration-300 ease-in-out ${isCollapsed ? "w-20" : "w-80"}`}>
                 {/* Original Sidebar */}
                 <aside
-                    className={`absolute top-0 left-0 w-full h-full border-r border-black/5 dark:border-white/5 bg-[#0b0b0b] text-white dark:bg-[#f3f3f3] dark:text-black flex flex-col p-4 md:p-6 z-10 overflow-hidden transition-all duration-300 ease-in-out ${(isChatOpen || isQuestionnaireOpen || isSettingsOpen || isAiSettingsOpen || isAuthOpen) ? "-translate-x-full opacity-0 pointer-events-none" : "translate-x-0 opacity-100 pointer-events-auto"
+                    className={`absolute top-0 left-0 w-full h-full border-r border-black/5 dark:border-white/5 bg-[#0b0b0b] text-white dark:bg-[#f3f3f3] dark:text-black flex flex-col p-4 md:p-6 z-10 overflow-hidden transition-all duration-300 ease-in-out ${(isChatOpen || isQuestionnaireOpen || isSettingsOpen || isAiSettingsOpen || isAuthOpen || isDatasetsOpen || !!activeRegionPanel) ? "-translate-x-full opacity-0 pointer-events-none" : "translate-x-0 opacity-100 pointer-events-auto"
                         } ${isCollapsed ? "items-center justify-between" : ""}`}
                 >
                     {/* Background Glows (adapted from navbar styling) */}
@@ -348,37 +350,40 @@ export default function AppPage() {
 
                         <div className="h-px w-full bg-white/10 dark:bg-black/10 shrink-0 my-0"></div>
 
-                        <div className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-2 pr-1" data-lenis-prevent>
+                        <div className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-1.5 pr-1" data-lenis-prevent>
                             {Object.keys(globalData).length === 0 ? (
                                 <div className="text-xs opacity-50 py-2 pl-2 text-center mt-4">
                                     {language === 'cs' ? "Načítám data..." : "Loading data..."}
                                 </div>
+                            ) : isCollapsed ? (
+                                <button
+                                    onClick={() => setIsCollapsed(false)}
+                                    className="h-12 w-12 mx-auto rounded-full bg-[#1a1a1a] dark:bg-[#ececeb] text-white dark:text-black hover:bg-[#222222] dark:hover:bg-[#dcdcdc] border border-white/10 dark:border-black/10 flex items-center justify-center transition-all transform-gpu duration-300 ease-in-out cursor-pointer active:translate-y-px"
+                                    title={language === 'cs' ? 'Kraje' : 'Regions'}
+                                >
+                                    <MapPin size={20} />
+                                </button>
                             ) : (
                                 <>
                                     {ALL_REGIONS.map((region) => {
-                                        const hasData = globalData[region.id] && Object.values(globalData[region.id]).some(cats => cats.length > 0);
+                                        const regionCats = globalData[region.id] || {};
+                                        const hasData = Object.values(regionCats).some(cats => cats.length > 0);
+                                        const catCount = Object.values(regionCats).filter(cats => cats.length > 0).length;
                                         return (
                                             <button
                                                 key={region.id}
                                                 onClick={() => hasData && setActiveRegionPanel(region.id)}
                                                 disabled={!hasData}
-                                                className={`group outline-none focus:outline-none focus:ring-0 flex items-center justify-between transition-all transform-gpu duration-300 ease-in-out ${!hasData ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer active:translate-y-px'} ${isCollapsed
-                                                    ? "h-12 w-12 mx-auto rounded-full bg-[#1a1a1a] dark:bg-[#ececeb] text-white dark:text-black hover:bg-[#262626] dark:hover:bg-[#dcdcdc] border border-white/10 dark:border-black/10 backdrop-blur-md"
-                                                    : "gap-3 px-5 py-3 w-full text-sm font-medium rounded-full bg-[#1a1a1a] dark:bg-[#ececeb] text-white dark:text-black hover:bg-[#262626] dark:hover:bg-[#dcdcdc] border border-white/10 dark:border-black/10 backdrop-blur-md"
-                                                    }`}
+                                                className={`group outline-none focus:outline-none focus:ring-0 flex items-center justify-between transition-all transform-gpu duration-300 ease-in-out ${!hasData ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer active:translate-y-px'} px-5 py-3 w-full text-sm font-medium rounded-full bg-[#1a1a1a] dark:bg-[#ececeb] text-white dark:text-black hover:bg-[#222222] dark:hover:bg-[#dcdcdc] border border-white/10 dark:border-black/10`}
                                                 title={!hasData ? (language === 'cs' ? 'Prázdný' : 'Empty') : region.label}
                                             >
-                                                <div className="flex items-center gap-3 w-full relative overflow-hidden">
-                                                    {!isCollapsed ? (
-                                                        <span className="flex-1 text-left truncate">
-                                                            {region.label}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="mx-auto text-[10px] font-bold uppercase truncate max-w-full px-1 leading-none">
-                                                            {region.label.substring(0, 3)}
-                                                        </span>
-                                                    )}
-                                                </div>
+                                                <span className="flex-1 text-left truncate">{region.label}</span>
+                                                {hasData && (
+                                                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                                                        <span className="text-[11px] tabular-nums opacity-50 font-mono">{catCount}</span>
+                                                        <ChevronDown size={14} className="text-white/60 dark:text-black/60" />
+                                                    </div>
+                                                )}
                                             </button>
                                         )
                                     })}
@@ -451,6 +456,13 @@ export default function AppPage() {
                                 >
                                     <Settings2 size={20} />
                                 </button>
+                                <button
+                                    onClick={() => setIsDatasetsOpen(true)}
+                                    className="cursor-pointer flex items-center justify-center transition-colors mb-2 duration-300 p-2 text-white dark:text-black opacity-60 hover:opacity-100"
+                                    title={language === 'cs' ? 'Datasety' : 'Datasets'}
+                                >
+                                    <Database size={20} />
+                                </button>
                                 <ModeToggle />
                             </>
                         ) : (
@@ -470,6 +482,13 @@ export default function AppPage() {
                                     title={language === 'cs' ? 'Nastavení' : 'Settings'}
                                 >
                                     <Settings2 size={18} />
+                                </button>
+                                <button
+                                    onClick={() => setIsDatasetsOpen(true)}
+                                    className="cursor-pointer flex items-center justify-center transition-colors duration-300 p-2 text-white dark:text-black opacity-60 hover:opacity-100"
+                                    title={language === 'cs' ? 'Datasety' : 'Datasets'}
+                                >
+                                    <Database size={18} />
                                 </button>
 
                                 <ModeToggle />
@@ -517,11 +536,21 @@ export default function AppPage() {
                 <RegionDataPanel
                     isOpen={!!activeRegionPanel}
                     onClose={() => setActiveRegionPanel(null)}
+                    isCollapsed={isCollapsed}
+                    setIsCollapsed={setIsCollapsed}
                     regionId={activeRegionPanel || ''}
                     regionName={activeRegionPanel ? getRegionLabel(activeRegionPanel) : ''}
                     regionData={activeRegionPanel && globalData[activeRegionPanel] ? globalData[activeRegionPanel] : {}}
                     activeLayers={activeLayers}
                     toggleLayer={toggleLayer}
+                    onOpenSettings={() => {
+                        setActiveRegionPanel(null);
+                        setIsSettingsOpen(true);
+                    }}
+                    onOpenDatasets={() => {
+                        setActiveRegionPanel(null);
+                        setIsDatasetsOpen(true);
+                    }}
                 />
 
                 <SettingsPanel
@@ -543,6 +572,22 @@ export default function AppPage() {
                     activeHeatmaps={activeHeatmaps}
                     toggleHeatmap={toggleHeatmap}
                     resetSettings={resetSettings}
+                    onOpenDatasets={() => {
+                        setIsSettingsOpen(false);
+                        setIsDatasetsOpen(true);
+                    }}
+                />
+                <DatasetsPanel
+                    isOpen={isDatasetsOpen}
+                    onClose={() => setIsDatasetsOpen(false)}
+                    isCollapsed={isCollapsed}
+                    setIsCollapsed={setIsCollapsed}
+                    activeLayers={activeLayers}
+                    toggleLayer={toggleLayer}
+                    onOpenSettings={() => {
+                        setIsDatasetsOpen(false);
+                        setIsSettingsOpen(true);
+                    }}
                 />
             </div>
 

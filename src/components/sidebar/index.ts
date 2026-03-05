@@ -5,5 +5,6 @@ export * from './ai-settings-panel';
 export * from './auth-panel';
 export * from './legal-panel';
 export * from './region-data-panel';
+export * from './datasets-panel';
 export { SettingsPanel } from './settings-panel';
 export { QuestionnairePanel } from './questionnaire-panel';

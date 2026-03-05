@@ -1,5 +1,5 @@
 import React from 'react';
-import { Settings2, RotateCcw } from 'lucide-react';
+import { Settings2, RotateCcw, Database } from 'lucide-react';
 import { useLanguage } from '@/components/providers/language-provider';
 import { SidebarLayout } from './sidebar-layout';
 
@@ -23,23 +23,36 @@ interface SettingsPanelProps {
     activeHeatmaps: Record<string, boolean>;
     toggleHeatmap: (key: string, value: boolean) => void;
     resetSettings: () => void;
+    onOpenDatasets?: () => void;
 }
 
 export function SettingsPanel({
     isOpen, onClose, isCollapsed, setIsCollapsed,
     mapType, setMapType, colorBlindMode, setColorBlindMode,
     showFills, setShowFills, layerOpacity, setLayerOpacity,
-    mapOpacity, setMapOpacity, heatmapCategories, activeHeatmaps, toggleHeatmap, resetSettings
+    mapOpacity, setMapOpacity, heatmapCategories, activeHeatmaps, toggleHeatmap, resetSettings,
+    onOpenDatasets
 }: SettingsPanelProps) {
     const { language } = useLanguage();
 
-    const activeSettingsIcon = (
-        <button
-            className="cursor-pointer flex items-center justify-center transition-colors duration-300 p-2 text-[#3388ff] opacity-100 hover:opacity-100"
-            title={language === 'cs' ? 'Nastavení' : 'Settings'}
-        >
-            <Settings2 size={isCollapsed ? 20 : 18} />
-        </button>
+    const extraControls = (
+        <>
+            <button
+                className={`cursor-pointer flex items-center justify-center transition-colors duration-300 p-2 text-[#3388ff] opacity-100 hover:opacity-100 ${isCollapsed ? 'mb-2' : ''}`}
+                title={language === 'cs' ? 'Nastavení' : 'Settings'}
+            >
+                <Settings2 size={isCollapsed ? 20 : 18} />
+            </button>
+            {onOpenDatasets && (
+                <button
+                    onClick={onOpenDatasets}
+                    className={`cursor-pointer flex items-center justify-center transition-colors duration-300 p-2 text-white dark:text-black opacity-60 hover:opacity-100 ${isCollapsed ? 'mb-2' : ''}`}
+                    title={language === 'cs' ? 'Datasety' : 'Datasets'}
+                >
+                    <Database size={isCollapsed ? 20 : 18} />
+                </button>
+            )}
+        </>
     );
 
     return (
@@ -51,7 +64,7 @@ export function SettingsPanel({
             zIndex={20}
             collapsedIcon={<Settings2 size={20} />}
             collapsedIconTitle={language === 'cs' ? 'Nastavení' : 'Settings'}
-            extraBottomControls={activeSettingsIcon}
+            extraBottomControls={extraControls}
             showAuthSection={false}
         >
             <div className="text-center shrink-0 mb-6 mt-4">

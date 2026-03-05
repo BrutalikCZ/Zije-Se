@@ -10,6 +10,7 @@ interface AIChatPanelProps {
     isCollapsed: boolean;
     setIsCollapsed: (v: boolean) => void;
     onOpenAiSettings: () => void;
+    onLoginClick: () => void;
 }
 
 interface Message {
@@ -25,11 +26,11 @@ interface ThinkingStep {
 const MAX_HISTORY_PAIRS = 10;
 
 function extract_json(text: string): any {
-    try { return JSON.parse(text.trim()); } catch {}
+    try { return JSON.parse(text.trim()); } catch { }
     const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (fence) { try { return JSON.parse(fence[1].trim()); } catch {} }
+    if (fence) { try { return JSON.parse(fence[1].trim()); } catch { } }
     const obj = text.match(/\{[\s\S]*\}/);
-    if (obj) { try { return JSON.parse(obj[0]); } catch {} }
+    if (obj) { try { return JSON.parse(obj[0]); } catch { } }
     return null;
 }
 
@@ -39,7 +40,7 @@ const SYSTEM_PROMPT =
     'Pokud geodata nejsou k dispozici nebo nejsou relevantní, odpovídej na základě obecných znalostí. ' +
     'Odpovídej vždy v jazyce uživatele.';
 
-export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOpenAiSettings }: AIChatPanelProps) {
+export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOpenAiSettings, onLoginClick }: AIChatPanelProps) {
     const { language } = useLanguage();
     const { user } = useAuth();
     const isLoggedIn = !!user;
