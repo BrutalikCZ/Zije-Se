@@ -101,8 +101,20 @@ export function LegacyLayers({
                     highlightColor: [255, 255, 255, 128],
 
                     onClick: (info) => {
-                        if (info.object) {
-                            console.log("Clicked GeoJSON Object:", info.object);
+                        if (info.object && overlayRef.current) {
+                            try {
+                                const deck = (overlayRef.current as any)._deck;
+                                if (deck && info.x !== undefined && info.y !== undefined) {
+                                    const picked = deck.pickMultipleObjects({ x: info.x, y: info.y, radius: 2 });
+                                    if (picked && picked.length > 0) {
+                                        window.dispatchEvent(new CustomEvent('dataset-features-clicked', { detail: { features: picked } }));
+                                    }
+                                } else {
+                                    window.dispatchEvent(new CustomEvent('dataset-features-clicked', { detail: { features: [info] } }));
+                                }
+                            } catch (e) {
+                                window.dispatchEvent(new CustomEvent('dataset-features-clicked', { detail: { features: [info] } }));
+                            }
                         }
                     }
                 });

@@ -25,7 +25,7 @@ async function saveUsersFile(users: any[]) {
 export async function POST(req: Request) {
     try {
         const body = await req.json();
-        const { action, email, password, name, questionnaireData } = body;
+        const { action, email, password, name, questionnaireData, mapSettings, aiSettings } = body;
 
         const users = await getUsersFile();
 
@@ -42,7 +42,9 @@ export async function POST(req: Request) {
                 password, // In a real app we'd hash this!
                 name: name || email.split('@')[0],
                 credits: 100, // starting credits
-                questionnaireData: null
+                questionnaireData: null,
+                mapSettings: null,
+                aiSettings: null
             };
 
             users.push(newUser);
@@ -50,7 +52,7 @@ export async function POST(req: Request) {
 
             return NextResponse.json({
                 message: 'Registered successfully',
-                user: { id: newUser.id, email: newUser.email, name: newUser.name, credits: newUser.credits, questionnaireData: newUser.questionnaireData }
+                user: { id: newUser.id, email: newUser.email, name: newUser.name, credits: newUser.credits, questionnaireData: newUser.questionnaireData, mapSettings: newUser.mapSettings, aiSettings: newUser.aiSettings }
             });
         }
 
@@ -62,7 +64,7 @@ export async function POST(req: Request) {
 
             return NextResponse.json({
                 message: 'Logged in successfully',
-                user: { id: user.id, email: user.email, name: user.name, credits: user.credits, questionnaireData: user.questionnaireData }
+                user: { id: user.id, email: user.email, name: user.name, credits: user.credits, questionnaireData: user.questionnaireData, mapSettings: user.mapSettings, aiSettings: user.aiSettings }
             });
         }
 
@@ -76,6 +78,12 @@ export async function POST(req: Request) {
             if (questionnaireData !== undefined) {
                 users[userIndex].questionnaireData = questionnaireData;
             }
+            if (mapSettings !== undefined) {
+                users[userIndex].mapSettings = mapSettings;
+            }
+            if (aiSettings !== undefined) {
+                users[userIndex].aiSettings = aiSettings;
+            }
 
             await saveUsersFile(users);
             return NextResponse.json({
@@ -85,7 +93,9 @@ export async function POST(req: Request) {
                     email: users[userIndex].email,
                     name: users[userIndex].name,
                     credits: users[userIndex].credits,
-                    questionnaireData: users[userIndex].questionnaireData
+                    questionnaireData: users[userIndex].questionnaireData,
+                    mapSettings: users[userIndex].mapSettings,
+                    aiSettings: users[userIndex].aiSettings
                 }
             });
         }

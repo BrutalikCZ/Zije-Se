@@ -418,6 +418,7 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
     const aiSettingsButton = (
         <button
             onClick={onOpenAiSettings}
+            data-tour="ai-settings-button"
             className="cursor-pointer flex items-center justify-center transition-colors duration-300 p-2 text-white dark:text-black opacity-60 hover:opacity-100"
             title={language === 'cs' ? 'Nastavení AI' : 'AI Settings'}
         >
@@ -534,7 +535,7 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
             </div>
 
             {/* Input area */}
-            <div className="relative z-10 shrink-0 mt-3 mb-2 group">
+            <div className="relative z-10 shrink-0 mt-3 mb-2 group" data-tour="ai-chat-input">
                 {!isLoggedIn && (
                     <div className="text-center text-[11px] text-[#3388ff]/70 mb-2 font-medium">
                         {language === 'cs' ? 'Pro použití AI chatu se přihlaste' : 'Log in to use AI chat'}

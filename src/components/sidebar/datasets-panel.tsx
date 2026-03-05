@@ -77,7 +77,7 @@ function FileTreeNode({ node, level = 0, activeLayers, toggleLayer, insideTree =
                         onChange={(e) => toggleLayer(layerPath, e.target.checked)}
                     />
                     <div className={`w-9 h-5 rounded-full transition-colors ${isActive ? 'bg-[#3388ff]' : 'bg-white/10 dark:bg-black/10 group-hover:bg-white/20 dark:group-hover:bg-black/20'}`}></div>
-                    <div className={`absolute w-3.5 h-3.5 bg-white dark:bg-[#0b0b0b] rounded-full left-0.5 top-0.5 transition-transform shadow-sm ${isActive ? 'translate-x-[18px]' : ''}`}></div>
+                    <div className={`absolute w-4 h-4 bg-white dark:bg-[#0b0b0b] rounded-full left-0.5 top-0.5 transition-transform shadow-sm ${isActive ? 'translate-x-[16px]' : ''}`}></div>
                 </div>
             ) : (
                 <div className="flex items-center shrink-0 opacity-50 ml-1.5 mr-1.5">
@@ -143,30 +143,32 @@ export function DatasetsPanel({
             extraBottomControls={extraControls}
             showAuthSection={false}
         >
-            <div className="text-center shrink-0 mb-6 mt-4">
-                <h1 className="text-2xl font-black uppercase tracking-wider text-white dark:text-black mb-2">
-                    {language === 'cs' ? 'DATASETY' : 'DATASETS'}
-                </h1>
-                <p className="text-xs text-gray-400 dark:text-gray-500 mb-4 px-2">
-                    {language === 'cs' ? 'Dostupné datové sady a soubory' : 'Available datasets and files'}
-                </p>
-                <div className="h-px w-full bg-white/10 dark:bg-black/10"></div>
-            </div>
+            <div data-tour="datasets-panel" className="flex-1 flex flex-col min-h-0 relative z-10 w-full">
+                <div className="text-center shrink-0 mb-6 mt-4">
+                    <h1 className="text-2xl font-black uppercase tracking-wider text-white dark:text-black mb-2">
+                        {language === 'cs' ? 'DATASETY' : 'DATASETS'}
+                    </h1>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mb-4 px-2">
+                        {language === 'cs' ? 'Dostupné datové sady a soubory' : 'Available datasets and files'}
+                    </p>
+                    <div className="h-px w-full bg-white/10 dark:bg-black/10"></div>
+                </div>
 
-            <div className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-2 relative z-10 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent pr-1 pb-4" data-lenis-prevent>
-                {loading ? (
-                    <div className="text-xs opacity-50 py-4 text-center">
-                        {language === 'cs' ? 'Načítám...' : 'Loading...'}
-                    </div>
-                ) : data.length === 0 ? (
-                    <div className="text-xs opacity-50 py-4 text-center">
-                        {language === 'cs' ? 'Složka data/datasets je prázdná nebo neexistuje.' : 'data/datasets folder is empty or missing.'}
-                    </div>
-                ) : (
-                    data.map((node, i) => (
-                        <FileTreeNode key={i} node={node} activeLayers={activeLayers} toggleLayer={toggleLayer} />
-                    ))
-                )}
+                <div className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-2 relative z-10 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent pr-1 pb-4" data-lenis-prevent>
+                    {loading ? (
+                        <div className="text-xs opacity-50 py-4 text-center">
+                            {language === 'cs' ? 'Načítám...' : 'Loading...'}
+                        </div>
+                    ) : data.length === 0 ? (
+                        <div className="text-xs opacity-50 py-4 text-center">
+                            {language === 'cs' ? 'Složka data/datasets je prázdná nebo neexistuje.' : 'data/datasets folder is empty or missing.'}
+                        </div>
+                    ) : (
+                        data.map((node, i) => (
+                            <FileTreeNode key={i} node={node} activeLayers={activeLayers} toggleLayer={toggleLayer} />
+                        ))
+                    )}
+                </div>
             </div>
         </SidebarLayout>
     );
