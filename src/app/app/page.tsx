@@ -6,11 +6,30 @@ import { ArrowLeft, BotMessageSquare, ListChecks, PanelLeftClose, PanelLeft, Glo
 import { useLanguage } from "@/components/providers/language-provider";
 import { Logo } from "@/components/logo";
 import { ModeToggle } from "@/components/mode-toggle";
-import { Map, MapControls, MapFillLayer } from "@/components/map/map";
+import { Map, MapControls, MapFillLayer, useMap } from "@/components/map/map";
+import { MapCircleLayer } from "@/components/map/circle-layer";
+import { MapLocationLayer } from "@/components/map/location-layer";
 import { LegacyLayers } from "@/components/map/legacy-layers";
 import { QuestionnairePanel, SettingsPanel, AIChatPanel, AiSettingsPanel, AuthPanel, RegionDataPanel, DatasetsPanel } from "@/components/sidebar";
 import { ALL_REGIONS, getRegionLabel } from "@/lib/data-mapping";
 import { useAuth } from "@/components/providers/auth-provider";
+
+function MapRightClickHandler() {
+    const { map } = useMap();
+    useEffect(() => {
+        if (!map) return;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const handler = (e: any) => {
+            const { lat, lng } = e.lngLat;
+            (window as any).CurrentTileContext = { lat, lng };
+            window.dispatchEvent(new CustomEvent('tileContextUpdated', { detail: { lat, lng } }));
+            window.dispatchEvent(new CustomEvent('open-ai-chat'));
+        };
+        map.on('contextmenu', handler);
+        return () => { map.off('contextmenu', handler); };
+    }, [map]);
+    return null;
+}
 
 export default function AppPage() {
     const { user, logout } = useAuth();
@@ -23,6 +42,8 @@ export default function AppPage() {
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isAiSettingsOpen, setIsAiSettingsOpen] = useState(false);
     const [isDatasetsOpen, setIsDatasetsOpen] = useState(false);
+
+    const [aiModel, setAiModel] = useState<'gemma' | 'gemini'>('gemma');
 
     // Auth Panel Toggle Exposed for nested components
     const openAuthPanel = () => {
@@ -79,6 +100,8 @@ export default function AppPage() {
     const [activeHeatmaps, setActiveHeatmaps] = useState<Record<string, boolean>>({});
     const [heatmapData, setHeatmapData] = useState<GeoJSON.FeatureCollection | null>(null);
     const [highlightedTilesData, setHighlightedTilesData] = useState<GeoJSON.FeatureCollection | null>(null);
+    const [aiPoiData, setAiPoiData] = useState<GeoJSON.FeatureCollection | null>(null);
+    const [aiLocationData, setAiLocationData] = useState<GeoJSON.FeatureCollection | null>(null);
 
     // Compute centroid of a polygon (simple average of coordinates)
     const getPolygonCentroid = useCallback((feature: GeoJSON.Feature): [number, number] | null => {
@@ -128,6 +151,29 @@ export default function AppPage() {
             features: nearest.map(n => n.feature)
         });
     }, [heatmapData, getPolygonCentroid]);
+
+    useEffect(() => {
+        const handleOpenChat = () => setIsChatOpen(true);
+        window.addEventListener('open-ai-chat', handleOpenChat);
+        return () => window.removeEventListener('open-ai-chat', handleOpenChat);
+    }, []);
+
+    useEffect(() => {
+        const handlePois = (e: Event) => {
+            const detail = (e as CustomEvent).detail;
+            if (detail?.geojson) setAiPoiData(detail.geojson);
+        };
+        const handleLocation = (e: Event) => {
+            const detail = (e as CustomEvent).detail;
+            if (detail?.geojson) setAiLocationData(detail.geojson);
+        };
+        window.addEventListener('ai-map-pois', handlePois);
+        window.addEventListener('ai-map-location', handleLocation);
+        return () => {
+            window.removeEventListener('ai-map-pois', handlePois);
+            window.removeEventListener('ai-map-location', handleLocation);
+        };
+    }, []);
 
     const toggleHeatmap = (key: string, value: boolean) => {
         setActiveHeatmaps(prev => ({ ...prev, [key]: value }));
@@ -511,12 +557,16 @@ export default function AppPage() {
                     setIsCollapsed={setIsCollapsed}
                     onOpenAiSettings={() => setIsAiSettingsOpen(true)}
                     onLoginClick={openAuthPanel}
+                    aiModel={aiModel}
                 />
                 <AiSettingsPanel
                     isOpen={isAiSettingsOpen}
                     onClose={() => setIsAiSettingsOpen(false)}
                     isCollapsed={isCollapsed}
                     setIsCollapsed={setIsCollapsed}
+                    onLoginClick={openAuthPanel}
+                    aiModel={aiModel}
+                    setAiModel={setAiModel}
                 />
                 <QuestionnairePanel
                     isOpen={isQuestionnaireOpen}
@@ -598,6 +648,7 @@ export default function AppPage() {
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     styles={mapStyleProp as any}
                 >
+                    <MapRightClickHandler />
                     <MapControls position="bottom-right" showZoom showCompass />
                     <LegacyLayers
                         activeLayers={activeLayers}
@@ -628,6 +679,20 @@ export default function AppPage() {
                             defaultColor="rgba(0, 200, 255, 0.25)"
                             opacity={1}
                             outlineColor="#00e5ff"
+                        />
+                    )}
+                    {aiLocationData && (
+                        <MapLocationLayer
+                            id="ai-location"
+                            data={aiLocationData}
+                            autoFlyTo={true}
+                        />
+                    )}
+                    {aiPoiData && (
+                        <MapCircleLayer
+                            id="ai-pois"
+                            data={aiPoiData}
+                            autoFlyTo={true}
                         />
                     )}
                 </Map>

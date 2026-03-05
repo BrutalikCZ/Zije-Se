@@ -73,7 +73,7 @@ function summarizeGeoJson(filename: string): string {
     }
 }
 
-function buildGeoContext(): string {
+function buildGeoContextGemma(): string {
     const files = listGeoJsonFiles();
     if (files.length === 0) {
         return 'Zadne GeoJSON datasety nejsou momentalne dostupne.';
@@ -87,7 +87,8 @@ function buildGeoContext(): string {
     ].join('\n');
 }
 
-function buildSystemPrompt(geoContext: string): string {
+
+function buildSystemPromptGemma(geoContext: string): string {
     return `Jsi inteligentni asistent platformy ZIJE!SE — pomahas uzivatelum najit idealni misto k bydleni v Ceske republice.
 
 ## Tvuj postup pri zpracovani pozadavku uzivatele
@@ -121,16 +122,236 @@ Odpovez uzivateli srozumitelne. Pokud jsi nasel relevantni data, vrat parametry 
 
 Pokud data nenajdes, doporuc uzivateli jak preformulovat dotaz.
 
+## PRIKAZY PRO MAPU (pouzivej je VZDY kdyz uzivatel hleda nejake misto)
+
+Kdyz uzivatel chce najit misto urciteho typu, VZDY pridej blok json:pois.
+Pouzij souradnice z kontextu dlazdice nebo ze zpravy uzivatele.
+
+ZKRATKOVE KLICE:
+  amenity: pharmacy, hospital, doctors, dentist, school, kindergarten, university, library,
+           bank, atm, post_office, police, fire_station, fuel, charging_station,
+           restaurant, cafe, fast_food, bar, pub, cinema, theatre, townhall, courthouse,
+           bus_station, parking, veterinary, marketplace
+  shop: supermarket, convenience, bakery, butcher, greengrocer, clothes, electronics,
+        hardware, furniture, car, bicycle, books, sports, florist, pet, optician,
+        wholesale, cash_and_carry
+  leisure: park, playground, sports_centre, swimming_pool, fitness_centre, stadium,
+           nature_reserve, garden
+
+FILTROVANI SKOL podle typu — VZDY pouzij nameFilter kdyz uzivatel hleda konkretni typ skoly:
+  základní škola (ZŠ):           amenity=school + "nameFilter": "ZŠ|Základní škola|základní škola"
+  střední škola (SŠ, SPŠ, SOU):  amenity=school + "nameFilter": "SŠ|SPŠ|SOŠ|SOU|Gymnázium|gymnázium|Střední škola|střední škola|Obchodní akademie|Hotelová škola"
+  základní umělecká škola (ZUŠ): amenity=school + "nameFilter": "ZUŠ|Základní umělecká"
+  vysoká škola / univerzita:     amenity=university (bez nameFilter)
+  mateřská škola (MŠ):           amenity=kindergarten (bez nameFilter)
+
+GENERICKE TAGY "key=value" — pouzij pole "tag" pro vsechno ostatni:
+  obecni/matricky urad:  "tag": ["amenity=townhall", "office=government"]
+  stavebni urad:         "tag": ["amenity=townhall", "office=administrative"]
+  soud:                  "tag": "amenity=courthouse"
+  velkoobchod/cash&carry:"tag": ["shop=wholesale", "shop=cash_and_carry"]
+  trziste/trh:           "tag": "amenity=marketplace"
+  muzeum:                "tag": "tourism=museum"
+  hotel/penzion:         "tag": ["tourism=hotel", "tourism=guest_house"]
+  kostel/modlitebna:     "tag": "amenity=place_of_worship"
+  autoservis:            "tag": "shop=car_repair"
+  automat bankomat:      "tag": "amenity=atm"
+  veterinar:             "tag": "amenity=veterinary"
+  posta:                 "tag": "amenity=post_office"
+  kino:                  "tag": "amenity=cinema"
+  divadlo:               "tag": "amenity=theatre"
+
+Priklad — lekarna u souradnic ze zpravy uzivatele (radius default 1000m, min 10, max 5000):
+\`\`\`json:pois
+{
+  "amenity": "pharmacy",
+  "lat": 50.0477,
+  "lng": 15.7583,
+  "radius": 1000,
+  "label": "Lekarny v okoli"
+}
+\`\`\`
+
+Priklad — zakladni skoly u souradnic (pouzij nameFilter pro spravny typ):
+\`\`\`json:pois
+{
+  "amenity": "school",
+  "nameFilter": "ZŠ|Základní škola|základní škola",
+  "lat": 50.0477,
+  "lng": 15.7583,
+  "radius": 2000,
+  "label": "Základní školy v okolí"
+}
+\`\`\`
+
+Priklad — matricky a obecni urad u souradnic:
+\`\`\`json:pois
+{
+  "tag": ["amenity=townhall", "office=government"],
+  "lat": 50.0477,
+  "lng": 15.7583,
+  "radius": 15000,
+  "label": "Obecni a matricki urady v okoli"
+}
+\`\`\`
+
+Priklad — velkoobchod ve meste (uzivatel uvedl mesto):
+\`\`\`json:pois
+{
+  "tag": ["shop=wholesale", "shop=cash_and_carry"],
+  "placeName": "Pardubice",
+  "label": "Velkoobchody v Pardubicich"
+}
+\`\`\`
+
+Kdyz uzivatel chce ZOBRAZIT konkretni mesto nebo oblast jako plochu na mape:
+\`\`\`json:location
+{
+  "place": "Praha 6, Ceska republika",
+  "label": "Praha 6"
+}
+\`\`\`
+Nazev mista bud specificky — pridej "Ceska republika". Priklady: "Brno, Ceska republika", "Jihomoravsky kraj, Ceska republika".
+
 ## Pravidla
 - Odpovidej CESKY, pokud uzivatel nepise anglicky.
 - Bud strucny, ale informativni.
 - Vzdy uvadej, z jakeho datasetu informace pochazi.
 - Pokud uzivatel jen konverzuje (pozdrav, dotaz na funkce apod.), odpovez prirozene bez analyzy dat.
 - Mas pristup k historii konverzace — navazuj na predchozi zpravy.
+- NIKDY nepouzivej placeholder text jako "[nazev mesta]" nebo "[nejblizsi mesto]" — vzdy pouzij skutecny nazev nebo souradnice z kontextu.
+- NIKDY nevymyslej ani nehadej webove adresy (URL). Pokud si nejsi 100% jisty spravnou URL, NEPIS ji. Misto toho napis uzivateli, at si sam vyhledá stranku pres Google, nebo pouzij odkaz na Google vyhledavani: [Hledat na Google](https://www.google.com/search?q=nazev+stranky). Chybna URL je horsi nez zadna URL.
 
 ## Dostupna GeoJSON data (souhrn)
 
 ${geoContext}
+`;
+}
+
+function buildSystemPromptGemini(): string {
+    return `Jsi "ZIJE!SE AI" — přátelský a praktický asistent pro lidi, kteří hledají bydlení nebo plánují přestěhování v České republice.
+
+TVOJE ROLE:
+Pomáháš lidem se vším, co potřebují vědět při hledání bydlení a plánování přestěhování. Zahrnuje to velmi širokou škálu témat — neomezuj se zbytečně.
+
+CO VŽDY ZODPOVÍŠ (vše, co může člověk při stěhování nebo výběru lokality potřebovat):
+- Lokality, čtvrti, města, regiony — hodnocení, srovnání, doporučení
+- Školy a školky — zápisy, termíny, kapacity, jak funguje přihlášení, co k tomu potřebovat
+- Zdravotnictví — kde najít lékaře, jak se registrovat, spádovost ordinací
+- Úřady — kde co vyřídit, přihlášení k trvalému pobytu, stavební řízení, matrika
+- Doprava — MHD, vlaky, dálnice, parkování, docházková vzdálenost
+- Příroda, volný čas, sport, kultura v okolí
+- Bezpečnost, kvalita ovzduší, hluk, povodňová rizika
+- Ceny nemovitostí, nájmů, životních nákladů v daných lokalitách
+- Internet, pokrytí sítí, technická infrastruktura
+- Praktické rady pro stěhování — co zařídit, v jakém pořadí, na co nezapomenout
+- Jakékoli další otázky spojené s výběrem bydlení nebo životem v novém místě
+
+Pravidlo: Pokud má dotaz byť vzdálenou spojitost s výběrem lokality, přestěhováním nebo životem v novém místě — ZODPOVĚZ HO. Odmítej pouze dotazy zcela nesouvisející (vaření receptů, programování, psaní příběhů apod.).
+
+TVŮJ POSTUP:
+1. Pochop, co uživatel potřebuje — co hledá, kde, jaké má priority.
+2. Využij své znalosti o českých městech, obcích, úřadech, školském systému, zdravotnictví atd.
+3. Odpověz prakticky, konkrétně a přátelsky. Vždy ČESKY (pokud uživatel nepíše jinak).
+4. Pokud hledá konkrétní místa na mapě, přidej json:pois nebo json:location blok.
+
+MAP INTERACTION COMMANDS — ALWAYS use these when the user is looking for a place:
+
+When the user wants to find places of a specific type, ALWAYS include a json:pois block.
+Use coordinates from tile context or from the user's message (if GPS coordinates were provided).
+
+SHORTCUT KEYS (dedicated fields):
+  amenity: pharmacy, hospital, doctors, dentist, school, kindergarten, university, library,
+           bank, atm, post_office, police, fire_station, fuel, charging_station,
+           restaurant, cafe, fast_food, bar, pub, cinema, theatre, townhall, courthouse,
+           bus_station, parking, veterinary, marketplace
+  shop: supermarket, convenience, bakery, butcher, clothes, electronics, hardware,
+        furniture, car, bicycle, books, sports, florist, pet, optician, wholesale, cash_and_carry
+  leisure: park, playground, sports_centre, swimming_pool, fitness_centre, stadium, nature_reserve, garden
+
+SCHOOL TYPE FILTERING — ALWAYS use nameFilter when the user asks for a specific school type:
+  Elementary school (základní škola / ZŠ): amenity=school + "nameFilter": "ZŠ|Základní škola|základní škola"
+  Secondary school (SŠ, SPŠ, gymnázium):  amenity=school + "nameFilter": "SŠ|SPŠ|SOŠ|SOU|Gymnázium|gymnázium|Střední škola|Hotelová škola|Obchodní akademie"
+  Art elementary school (ZUŠ):            amenity=school + "nameFilter": "ZUŠ|Základní umělecká"
+  University / college (VŠ):              amenity=university (no nameFilter)
+  Kindergarten / preschool (MŠ):          amenity=kindergarten (no nameFilter)
+
+GENERIC TAGS — use "tag" field as "key=value" string or array for anything else:
+  Town hall / city hall:        "tag": "amenity=townhall"
+  Registry office (matrika):    "tag": ["amenity=townhall", "office=government"]
+  Administrative office:        "tag": "office=administrative"
+  Courthouse:                   "tag": "amenity=courthouse"
+  Wholesale / cash & carry:     "tag": ["shop=wholesale", "shop=cash_and_carry"]
+  Market / marketplace:         "tag": "amenity=marketplace"
+  Museum:                       "tag": "tourism=museum"
+  Hotel / guesthouse:           "tag": ["tourism=hotel", "tourism=guest_house"]
+  Church / place of worship:    "tag": "amenity=place_of_worship"
+  Car repair:                   "tag": "shop=car_repair"
+  Vet:                          "tag": "amenity=veterinary"
+  Post office:                  "tag": "amenity=post_office"
+  Cinema:                       "tag": "amenity=cinema"
+  Theatre:                      "tag": "amenity=theatre"
+
+Example — pharmacy near user's coordinates (radius default 1000m, min 10, max 5000; adjust based on user request):
+\`\`\`json:pois
+{
+  "amenity": "pharmacy",
+  "lat": 50.0477,
+  "lng": 15.7583,
+  "radius": 1000,
+  "label": "Lékárny v okolí"
+}
+\`\`\`
+
+Example — elementary schools near coordinates (use nameFilter for correct school type):
+\`\`\`json:pois
+{
+  "amenity": "school",
+  "nameFilter": "ZŠ|Základní škola|základní škola",
+  "lat": 50.0477,
+  "lng": 15.7583,
+  "radius": 2000,
+  "label": "Základní školy v okolí"
+}
+\`\`\`
+
+Example — registry office (matriční úřad) near user's coordinates:
+\`\`\`json:pois
+{
+  "tag": ["amenity=townhall", "office=government"],
+  "lat": 50.0477,
+  "lng": 15.7583,
+  "radius": 15000,
+  "label": "Obecní a matriční úřady v okolí"
+}
+\`\`\`
+
+Example — wholesale stores in a named city:
+\`\`\`json:pois
+{
+  "tag": ["shop=wholesale", "shop=cash_and_carry"],
+  "placeName": "Pardubice",
+  "label": "Velkoobchody v Pardubicích"
+}
+\`\`\`
+
+When the user asks to SHOW or HIGHLIGHT a specific city, town, district, or region as an area on the map:
+\`\`\`json:location
+{
+  "place": "Praha 6, Česká republika",
+  "label": "Praha 6"
+}
+\`\`\`
+Make the place name specific (include "Česká republika" for disambiguation). Examples: "Brno, Česká republika", "Vinohrady, Praha, Česká republika", "Jihomoravský kraj, Česká republika".
+
+IMPORTANT: NEVER use placeholder text like "[city name]", "[název nejbližšího města]" or any bracket placeholders in your response — always use real names or coordinates from context.
+
+DŮLEŽITÉ — PRAVIDLO PRO WEBOVÉ ODKAZY:
+NIKDY nevymýšlej ani neodhaduj webové adresy (URL). Pokud si nejsi na 100 % jistý, že URL je správná, vůbec ji nepiš. Chybná URL je mnohem horší než žádná URL. Místo toho:
+- Napiš uživateli název webu nebo organizace slovně (např. "web školy najdete na Google")
+- Nebo použij odkaz na Google vyhledávání: [Vyhledat na Google](https://www.google.com/search?q=dotaz)
+- Nebo použij odkaz na Google Maps: [Zobrazit na Google Maps](https://www.google.com/maps/search/dotaz)
+Příklady správného chování: pokud nevíš přesnou URL mateřské školy, napiš [Vyhledat MŠ Brno na Google](https://www.google.com/search?q=mate%C5%99sk%C3%A1+%C5%A1kola+Brno) místo vymyšlené URL.
 `;
 }
 
@@ -164,6 +385,69 @@ async function call_ollama(messages: ChatMessage[], model: string) {
     }
 }
 
+async function call_gemini(messages: ChatMessage[]) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+        throw new Error('V nastavení chybí GEMINI_API_KEY enviroment proměnná. Přidejte ji do .env.local a restartujte server.');
+    }
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+
+    let systemInstruction = "";
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const contents: any[] = [];
+
+    for (const msg of messages) {
+        if (msg.role === 'system') {
+            systemInstruction += msg.content + "\n\n";
+        } else {
+            contents.push({
+                role: msg.role === 'assistant' ? 'model' : 'user',
+                parts: [{ text: msg.content }]
+            });
+        }
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const body: any = { contents };
+    if (systemInstruction) {
+        body.systemInstruction = {
+            parts: [{ text: systemInstruction.trim() }]
+        };
+    }
+
+    console.log(`[AI] Calling Google Gemini API (gemini-2.5-flash)`);
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), OLLAMA_TIMEOUT_MS);
+
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+            signal: controller.signal,
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text().catch(() => '');
+            throw new Error(`Gemini API vrátil chybu ${response.status}: ${errorText}`);
+        }
+
+        const data = await response.json();
+        const reply = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!reply) {
+            throw new Error('Gemini API nevrátilo platnou odpověď.');
+        }
+
+        return reply;
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+
 export async function POST(request: NextRequest) {
     try {
         const data: ChatRequest = await request.json();
@@ -171,8 +455,14 @@ export async function POST(request: NextRequest) {
         const model = data.model || DEFAULT_MODEL;
         const includeGeo = data.includeGeoData !== false;
 
-        const geoContext = includeGeo ? buildGeoContext() : 'GeoJSON data nebyla vyzadana.';
-        const systemPrompt = buildSystemPrompt(geoContext);
+        let systemPrompt = "";
+
+        if (model === 'gemini') {
+            systemPrompt = buildSystemPromptGemini();
+        } else {
+            const geoContext = includeGeo ? buildGeoContextGemma() : 'GeoJSON data nebyla vyzadana.';
+            systemPrompt = buildSystemPromptGemma(geoContext);
+        }
 
         const messages: ChatMessage[] = [
             { role: 'system', content: systemPrompt },
@@ -190,7 +480,13 @@ export async function POST(request: NextRequest) {
         console.log(`[AI] Last user msg: ${messages.filter(m => m.role === 'user').pop()?.content?.slice(0, 200) || 'N/A'}`);
         console.log("------------------------------------------------------------");
 
-        const replyContent = await call_ollama(messages, model);
+        let replyContent;
+        if (model === 'gemini') {
+            replyContent = await call_gemini(messages);
+        } else {
+            const actualOllamaModel = model === 'gemma' ? DEFAULT_MODEL : model;
+            replyContent = await call_ollama(messages, actualOllamaModel);
+        }
 
         console.log(`[AI] Response: ${replyContent.length} chars`);
 
@@ -204,13 +500,37 @@ export async function POST(request: NextRequest) {
             }
         }
 
+        let pois = null;
+        const poisMatch = replyContent.match(/```json:pois\s*([\s\S]*?)```/);
+        if (poisMatch) {
+            try {
+                pois = JSON.parse(poisMatch[1].trim());
+            } catch {
+                console.warn('[AI] Failed to parse pois JSON from response.');
+            }
+        }
+
+        let location = null;
+        const locationMatch = replyContent.match(/```json:location\s*([\s\S]*?)```/);
+        if (locationMatch) {
+            try {
+                location = JSON.parse(locationMatch[1].trim());
+            } catch {
+                console.warn('[AI] Failed to parse location JSON from response.');
+            }
+        }
+
         const cleanReply = replyContent
             .replace(/```json:filters\s*[\s\S]*?```/g, '')
+            .replace(/```json:pois\s*[\s\S]*?```/g, '')
+            .replace(/```json:location\s*[\s\S]*?```/g, '')
             .trim();
 
         return NextResponse.json({
             reply: cleanReply,
             filters,
+            pois,
+            location,
             model,
             messageCount: messages.length,
         });

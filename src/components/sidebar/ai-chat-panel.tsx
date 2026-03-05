@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, Loader2, Info, BotMessageSquare, Settings2, Lock, Check, Trash2 } from 'lucide-react';
+import { getQuestions } from './questionnaire/questions-data';
+import { Send, Loader2, Info, BotMessageSquare, Settings2, Lock, Check } from 'lucide-react';
 import { useLanguage } from '@/components/providers/language-provider';
 import { useAuth } from '@/components/providers/auth-provider';
 import { SidebarLayout } from './sidebar-layout';
@@ -11,6 +12,7 @@ interface AIChatPanelProps {
     setIsCollapsed: (v: boolean) => void;
     onOpenAiSettings: () => void;
     onLoginClick: () => void;
+    aiModel: 'gemma' | 'gemini';
 }
 
 interface Message {
@@ -24,6 +26,88 @@ interface ThinkingStep {
 }
 
 const MAX_HISTORY_PAIRS = 10;
+
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function formatDist(km: number): string {
+    return km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function buildPOISummary(features: any[], label: string, refLat?: number, refLng?: number): string {
+    const total = features.length;
+    const shown = features.slice(0, 10);
+    const lines: string[] = [`Nalezeno ${total} míst — ${label}:`];
+
+    for (const f of shown) {
+        const props = f.properties || {};
+        const name = props.name || props['name:cs'] || props.amenity || props.shop || props.leisure || props.tourism || 'Bez názvu';
+        const coords: [number, number] | null =
+            f.geometry?.type === 'Point' ? [f.geometry.coordinates[1], f.geometry.coordinates[0]] : null;
+
+        let distStr = '';
+        if (coords && refLat != null && refLng != null) {
+            distStr = ` (${formatDist(haversineKm(refLat, refLng, coords[0], coords[1]))})`;
+        }
+
+        const addrParts = [props['addr:street'], props['addr:housenumber'], props['addr:city']].filter(Boolean);
+        const addr = addrParts.length ? ` — ${addrParts.join(' ')}` : '';
+
+        lines.push(`• ${name}${distStr}${addr}`);
+    }
+
+    if (total > 10) lines.push(`... a dalších ${total - 10} míst zobrazeno na mapě.`);
+    return lines.join('\n');
+}
+
+function renderInline(text: string): React.ReactNode[] {
+    // Split by **bold** first, then handle [label](url) links inside each segment
+    const boldSegments = text.split(/\*\*/);
+    const result: React.ReactNode[] = [];
+
+    boldSegments.forEach((seg, boldIdx) => {
+        if (boldIdx % 2 === 1) {
+            result.push(<strong key={`b${boldIdx}`}>{seg}</strong>);
+            return;
+        }
+        // Parse [label](url) links inside plain segments
+        const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g;
+        let last = 0;
+        let m: RegExpExecArray | null;
+        while ((m = linkRegex.exec(seg)) !== null) {
+            if (m.index > last) result.push(seg.slice(last, m.index));
+            result.push(
+                <a key={`l${boldIdx}-${m.index}`} href={m[2]} target="_blank" rel="noopener noreferrer"
+                    className="text-[#3388ff] hover:underline break-all">
+                    {m[1]}
+                </a>
+            );
+            last = m.index + m[0].length;
+        }
+        if (last < seg.length) result.push(seg.slice(last));
+    });
+
+    return result;
+}
+
+function renderMarkdown(text: string): React.ReactNode {
+    return text.split('\n').map((line, i) => {
+        const isBullet = /^(\*|•|-)\s+/.test(line);
+        const content = isBullet ? line.replace(/^(\*|•|-)\s+/, '') : line;
+        const inline = renderInline(content);
+
+        if (isBullet) {
+            return <div key={i} className="flex items-center gap-2"><span className="w-2 h-[1.5px] rounded-full bg-current shrink-0 opacity-60" /><span>{inline}</span></div>;
+        }
+        return <div key={i} className={line === '' ? 'h-2' : ''}>{inline}</div>;
+    });
+}
 
 function extract_json(text: string): any {
     try { return JSON.parse(text.trim()); } catch { }
@@ -40,7 +124,7 @@ const SYSTEM_PROMPT =
     'Pokud geodata nejsou k dispozici nebo nejsou relevantní, odpovídej na základě obecných znalostí. ' +
     'Odpovídej vždy v jazyce uživatele.';
 
-export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOpenAiSettings, onLoginClick }: AIChatPanelProps) {
+export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOpenAiSettings, onLoginClick, aiModel }: AIChatPanelProps) {
     const { language } = useLanguage();
     const { user } = useAuth();
     const isLoggedIn = !!user;
@@ -60,13 +144,21 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
     }, [isOpen, onClose]);
 
     useEffect(() => {
-        const handleContextUpdate = () => {
-            const state = (window as any).CurrentTileContext;
-            if (state && state.id) {
-                setContextNote(`Aktualizován kontext na dlaždici: ${state.id}`);
+        const handleContextUpdate = (e: Event) => {
+            const detail = (e as CustomEvent).detail as { lat?: number; lng?: number; id?: string } | undefined;
+            if (detail?.lat != null && detail?.lng != null) {
+                const lat = detail.lat.toFixed(5);
+                const lng = detail.lng.toFixed(5);
+                setContextNote(`Souřadnice: ${lat}, ${lng}`);
                 setMessages(prev => [...prev, {
                     role: 'system',
-                    content: `AI context updated to Tile ${state.id}`,
+                    content: `Uživatel označil souřadnice na mapě: zeměpisná šířka ${lat}, zeměpisná délka ${lng}`,
+                }]);
+            } else if (detail?.id) {
+                setContextNote(`Kontext dlaždice: ${detail.id}`);
+                setMessages(prev => [...prev, {
+                    role: 'system',
+                    content: `Kontext aktuální dlaždice: ${detail.id}`,
                 }]);
             }
         };
@@ -78,16 +170,43 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages, thinkingSteps, contextNote]);
 
+    useEffect(() => {
+        const handleClearHistory = () => {
+            setMessages([]);
+            setContextNote(null);
+        };
+        window.addEventListener('clear-ai-history', handleClearHistory);
+        return () => window.removeEventListener('clear-ai-history', handleClearHistory);
+    }, []);
+
     const build_API_messages = (conversation_history: Message[]) => {
         const api_messages: { role: string; content: string }[] = [
             { role: 'system', content: SYSTEM_PROMPT },
         ];
 
         const tile_context = (window as any).CurrentTileContext;
-        if (tile_context) {
+        if (tile_context?.lat != null && tile_context?.lng != null) {
+            api_messages.push({
+                role: 'system',
+                content: `Aktuální označené souřadnice na mapě: zeměpisná šířka ${tile_context.lat.toFixed(5)}, zeměpisná délka ${tile_context.lng.toFixed(5)}`,
+            });
+        } else if (tile_context) {
             api_messages.push({
                 role: 'system',
                 content: `Kontext aktuální dlaždice na mapě: ${JSON.stringify(tile_context)}`,
+            });
+        }
+
+        if (user?.questionnaireData && Object.keys(user.questionnaireData).length > 0) {
+            const questions = getQuestions('cs');
+            const answeredLines = Object.entries(user.questionnaireData)
+                .map(([idx, ans]) => {
+                    const q = questions[parseInt(idx)] ?? `Otázka ${parseInt(idx) + 1}`;
+                    return `- ${q}: ${ans ? 'ANO' : 'NE'}`;
+                });
+            api_messages.push({
+                role: 'system',
+                content: `Uživatelský dotazník (preference bydlení, ${answeredLines.length} odpovědí):\n${answeredLines.join('\n')}`,
             });
         }
 
@@ -122,76 +241,78 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
         }]);
 
         try {
-            let selectedFiles: string[] = [];
-
-            try {
-                const indexRes = await fetch('/api/geojson-index');
-                if (indexRes.ok) {
-                    const { files: geoFiles } = await indexRes.json();
-
-                    const fileListStr = (geoFiles as { path: string }[])
-                        .slice(0, 150)
-                        .map(f => f.path)
-                        .join('\n');
-
-                    const selectionMessages = [
-                        {
-                            role: 'system',
-                            content:
-                                'Odpovídej POUZE validním JSON objektem bez markdownu, uvozovek nebo jiného textu kolem.',
-                        },
-                        {
-                            role: 'user',
-                            content:
-                                `Dotaz uživatele: "${userMessage}"\n\n` +
-                                `Dostupné GeoJSON soubory (každý reprezentuje určitý typ geodat):\n${fileListStr}\n\n` +
-                                `Vyber 0–5 souborů, které mohou být relevantní pro zodpovězení dotazu. ` +
-                                `Vrať JSON ve formátu: {"selectedFiles": ["relativni/cesta.geojson"]}`,
-                        },
-                    ];
-
-                    const selRes = await fetch('/api/chat', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ messages: selectionMessages }),
-                    });
-
-                    if (selRes.ok) {
-                        const selData = await selRes.json();
-                        const parsed = extract_json(selData.reply || '');
-                        if (parsed) {
-                            selectedFiles = Array.isArray(parsed.selectedFiles)
-                                ? (parsed.selectedFiles as string[]).slice(0, 5)
-                                : [];
-                        }
-                    }
-                }
-            } catch {
-                // Ignore please
-            }
-
             let geoContext = '';
 
-            if (selectedFiles.length > 0) {
-                advanceStep(language === 'cs' ? 'Prohledávám databázi lokalit...' : 'Searching location database...',);
+            if (aiModel !== 'gemini') {
+                let selectedFiles: string[] = [];
 
                 try {
-                    const searchRes = await fetch('/api/geojson-search', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ filePaths: selectedFiles }),
-                    });
+                    const indexRes = await fetch('/api/geojson-index');
+                    if (indexRes.ok) {
+                        const { files: geoFiles } = await indexRes.json();
 
-                    if (searchRes.ok) {
-                        const { features } = await searchRes.json();
-                        if (Array.isArray(features) && features.length > 0) {
-                            geoContext =
-                                `Relevantní geodata nalezená v databázi:\n` +
-                                JSON.stringify(features.slice(0, 15), null, 2);
+                        const fileListStr = (geoFiles as { path: string }[])
+                            .slice(0, 150)
+                            .map(f => f.path)
+                            .join('\n');
+
+                        const selectionMessages = [
+                            {
+                                role: 'system',
+                                content:
+                                    'Odpovídej POUZE validním JSON objektem bez markdownu, uvozovek nebo jiného textu kolem.',
+                            },
+                            {
+                                role: 'user',
+                                content:
+                                    `Dotaz uživatele: "${userMessage}"\n\n` +
+                                    `Dostupné GeoJSON soubory (každý reprezentuje určitý typ geodat):\n${fileListStr}\n\n` +
+                                    `Vyber 0–5 souborů, které mohou být relevantní pro zodpovězení dotazu. ` +
+                                    `Vrať JSON ve formátu: {"selectedFiles": ["relativni/cesta.geojson"]}`,
+                            },
+                        ];
+
+                        const selRes = await fetch('/api/chat', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ messages: selectionMessages, model: aiModel }),
+                        });
+
+                        if (selRes.ok) {
+                            const selData = await selRes.json();
+                            const parsed = extract_json(selData.reply || '');
+                            if (parsed) {
+                                selectedFiles = Array.isArray(parsed.selectedFiles)
+                                    ? (parsed.selectedFiles as string[]).slice(0, 5)
+                                    : [];
+                            }
                         }
                     }
                 } catch {
                     // Ignore please
+                }
+
+                if (selectedFiles.length > 0) {
+                    advanceStep(language === 'cs' ? 'Prohledávám databázi lokalit...' : 'Searching location database...');
+
+                    try {
+                        const searchRes = await fetch('/api/geojson-search', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ filePaths: selectedFiles }),
+                        });
+
+                        if (searchRes.ok) {
+                            const { features } = await searchRes.json();
+                            if (Array.isArray(features) && features.length > 0) {
+                                geoContext =
+                                    `Relevantní geodata nalezená v databázi:\n` +
+                                    JSON.stringify(features.slice(0, 15), null, 2);
+                            }
+                        }
+                    } catch {
+                        // Ignore please
+                    }
                 }
             }
 
@@ -206,19 +327,77 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
             const finalRes = await fetch('/api/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ messages: apiMessages }),
+                body: JSON.stringify({ messages: apiMessages, model: aiModel }),
             });
 
             if (!finalRes.ok) throw new Error('Network error');
 
             const finalData = await finalRes.json();
-            setMessages(prev => [
-                ...prev,
-                {
-                    role: 'assistant',
-                    content: finalData.reply || (language === 'cs' ? 'Chyba: prázdná odpověď.' : 'Error: empty response.'),
-                },
-            ]);
+            console.log('[AI] pois:', JSON.stringify(finalData.pois), '| location:', JSON.stringify(finalData.location));
+
+            let poisSummary: string | null = null;
+
+            // Fetch POIs and show on map
+            if (finalData.pois) {
+                advanceStep(language === 'cs' ? 'Vyhledávám místa na mapě...' : 'Searching for places on map...');
+                try {
+                    const overpassRes = await fetch('/api/overpass', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(finalData.pois),
+                    });
+                    if (overpassRes.ok) {
+                        const geojson = await overpassRes.json();
+                        console.log('[AI] Overpass result:', geojson.features?.length, 'features');
+                        if (geojson.features?.length > 0) {
+                            window.dispatchEvent(new CustomEvent('ai-map-pois', {
+                                detail: { geojson, label: finalData.pois.label || '' },
+                            }));
+                            poisSummary = buildPOISummary(geojson.features, finalData.pois.label || 'místa', finalData.pois.lat, finalData.pois.lng);
+                        }
+                    } else {
+                        console.warn('[AI] Overpass error:', overpassRes.status, await overpassRes.text().catch(() => ''));
+                    }
+                } catch (err) {
+                    console.error('[AI] Overpass fetch failed:', err);
+                }
+            }
+
+            // Fetch location polygon and show on map
+            if (finalData.location) {
+                advanceStep(language === 'cs' ? 'Zobrazuji místo na mapě...' : 'Showing location on map...');
+                try {
+                    const nominatimRes = await fetch(
+                        `/api/nominatim?place=${encodeURIComponent(finalData.location.place)}`
+                    );
+                    if (nominatimRes.ok) {
+                        const geojson = await nominatimRes.json();
+                        console.log('[AI] Nominatim result:', geojson.features?.length, 'features');
+                        if (geojson.features?.length > 0) {
+                            window.dispatchEvent(new CustomEvent('ai-map-location', {
+                                detail: { geojson, label: finalData.location.label || '' },
+                            }));
+                        }
+                    } else {
+                        console.warn('[AI] Nominatim error:', nominatimRes.status);
+                    }
+                } catch (err) {
+                    console.error('[AI] Nominatim fetch failed:', err);
+                }
+            }
+
+            // Show AI reply and POI summary only after all processing is done
+            setMessages(prev => {
+                const next = [
+                    ...prev,
+                    {
+                        role: 'assistant' as const,
+                        content: finalData.reply || (language === 'cs' ? 'Chyba: prázdná odpověď.' : 'Error: empty response.'),
+                    },
+                ];
+                if (poisSummary) next.push({ role: 'assistant', content: poisSummary });
+                return next;
+            });
         } catch (error) {
             console.error(error);
             setMessages(prev => [
@@ -256,6 +435,7 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
             collapsedIcon={<BotMessageSquare size={20} />}
             collapsedIconTitle="Zije!Se AI"
             extraBottomControls={aiSettingsButton}
+            onLoginClick={onLoginClick}
         >
             {/* Header */}
             <div className="text-center shrink-0 mb-6 mt-4">
@@ -263,16 +443,6 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
                     <h1 className="text-2xl font-black uppercase tracking-wider text-white dark:text-black">
                         {language === 'cs' ? 'ZIJE!SE AI' : 'ZIJE!SE AI'}
                     </h1>
-                    {messages.length > 0 && !isLoading && (
-                        <button
-                            onClick={() => { setMessages([]); setContextNote(null); }}
-                            className="flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded-full bg-white/5 dark:bg-black/5 text-white/50 dark:text-black/50 hover:bg-red-500/10 hover:text-red-400 dark:hover:text-red-500 transition-colors border border-white/10 dark:border-black/10"
-                            title={language === 'cs' ? 'Vymazat historii' : 'Clear history'}
-                        >
-                            <Trash2 size={11} />
-                            {language === 'cs' ? 'Vymazat' : 'Clear'}
-                        </button>
-                    )}
                 </div>
                 <p className="text-xs text-gray-400 dark:text-gray-500 mb-4 px-2">
                     {language === 'cs'
@@ -290,7 +460,7 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
             )}
 
             {/* Message list */}
-            <div className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-4 relative z-10 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent pr-1">
+            <div className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-4 relative z-10 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent pr-1" data-lenis-prevent>
                 {messages.length === 0 && !isLoading && (
                     <div className="h-full flex flex-col items-center justify-center text-center opacity-50 gap-4 mt-8">
                         <p className="max-w-[200px] text-sm">
@@ -322,7 +492,7 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
                                     : 'bg-[#1a1a1a] dark:bg-[#ececeb] text-white dark:text-black border border-white/10 dark:border-black/10'
                                     }`}
                             >
-                                <p className="leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                                <div className="leading-relaxed text-[13px] flex flex-col gap-0.5">{renderMarkdown(msg.content)}</div>
                             </div>
                         )}
                     </div>
