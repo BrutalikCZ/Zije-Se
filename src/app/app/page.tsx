@@ -177,14 +177,14 @@ export default function AppPage() {
         { threshold: 0, color: '#8B0000' },     // 0%  - dark red
         { threshold: 1, color: '#FF6B6B' },      // 1-10% - light red
         { threshold: 11, color: '#FF6B6B' },     // 11-20% - light red
-        { threshold: 21, color: '#FFD700' },     // 21-30% - yellow
+        { threshold: 21, color: '#ff8000ff' },     // 21-30% - yellow
         { threshold: 31, color: '#FFD700' },     // 31-40% - yellow
-        { threshold: 41, color: '#FF8C00' },     // 41-50% - orange
-        { threshold: 51, color: '#FF8C00' },     // 51-60% - orange
-        { threshold: 61, color: '#FF8C00' },     // 61-70% - orange
-        { threshold: 71, color: '#90EE90' },     // 71-80% - light green
+        { threshold: 41, color: '#90EE90' },     // 41-50% - orange
+        { threshold: 51, color: '#67e667ff' },     // 51-60% - orange
+        { threshold: 61, color: '#40ea40ff' },     // 61-70% - orange
+        { threshold: 71, color: '#29e729ff' },     // 71-80% - light green
         { threshold: 81, color: '#228B22' },     // 81-90% - dark green
-        { threshold: 91, color: '#228B22' },     // 91-99% - dark green
+        { threshold: 91, color: '#0a7e27ff' },     // 91-99% - dark green
         { threshold: 100, color: '#4FC3F7' },    // 100%+ - light blue
     ];
 
@@ -792,6 +792,8 @@ export default function AppPage() {
                     setIsCollapsed={setIsCollapsed}
                     onEvaluated={handleQuestionnaireEvaluated}
                     onLoginClick={openAuthPanel}
+                    onRemoveHeatmap={() => setQuestionnaireHeatmapData(null)}
+                    hasHeatmap={questionnaireHeatmapData !== null}
                 />
                 <AuthPanel
                     isOpen={isAuthOpen}

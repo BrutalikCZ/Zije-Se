@@ -17,9 +17,11 @@ interface QuestionnairePanelProps {
     setIsCollapsed: (v: boolean) => void;
     onEvaluated?: (answers: Record<number, boolean>) => void;
     onLoginClick?: () => void;
+    onRemoveHeatmap?: () => void;
+    hasHeatmap?: boolean;
 }
 
-export function QuestionnairePanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onEvaluated, onLoginClick }: QuestionnairePanelProps) {
+export function QuestionnairePanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onEvaluated, onLoginClick, onRemoveHeatmap, hasHeatmap }: QuestionnairePanelProps) {
     const { language } = useLanguage();
     const [mode, setMode] = useState<'intro' | 'questionnaire' | 'result'>('intro');
     const [answers, setAnswers] = useState<Record<number, boolean>>({});
@@ -166,6 +168,8 @@ export function QuestionnairePanel({ isOpen, onClose, isCollapsed, setIsCollapse
                             isFinished={isFinished}
                             answeredCount={answeredCount}
                             onContinue={handleResultContinue}
+                            onRemoveHeatmap={onRemoveHeatmap ?? (() => {})}
+                            hasHeatmap={hasHeatmap ?? false}
                         />
                     ) : mode === 'intro' ? (
                         <QuestionnaireIntro

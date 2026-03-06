@@ -21,7 +21,7 @@ export const QUESTION_CATEGORY_MAP: Record<number, {
     10: { category: 'otherScore',       type: 'positive' },
     11: { category: 'healthcareScore',  type: 'positive' },
     12: { category: 'cultureScore',     type: 'positive' },
-    13: { category: 'otherScore',       type: 'positive' },
+    13: { category: 'airport',          type: 'positive' }, // letiště - boolean, radius ~15 dlaždic v DB
     14: { category: 'cultureScore',     type: 'positive' },
     15: { category: 'otherScore',       type: 'positive' },
     16: { category: 'otherScore',       type: 'positive' },
@@ -105,9 +105,10 @@ export function evaluateAnswers(
                 if (mapped) {
                     const score = props[mapped.category];
                     const threshold = mapped.threshold ?? 0;
-                    if (typeof score === 'number' && score > threshold) {
-                        matchCount++;
-                    }
+                    const matches =
+                        (typeof score === 'boolean' && score === true) ||
+                        (typeof score === 'number' && score > threshold);
+                    if (matches) matchCount++;
                 }
             }
         }

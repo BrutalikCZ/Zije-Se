@@ -5,9 +5,11 @@ interface QuestionnaireResultProps {
     isFinished: boolean;
     answeredCount: number;
     onContinue: () => void;
+    onRemoveHeatmap: () => void;
+    hasHeatmap: boolean;
 }
 
-export function QuestionnaireResult({ isFinished, answeredCount, onContinue }: QuestionnaireResultProps) {
+export function QuestionnaireResult({ isFinished, answeredCount, onContinue, onRemoveHeatmap, hasHeatmap }: QuestionnaireResultProps) {
     const { language } = useLanguage();
 
     return (
@@ -26,6 +28,14 @@ export function QuestionnaireResult({ isFinished, answeredCount, onContinue }: Q
             >
                 {language === 'cs' ? 'Pokračovat' : 'Continue'}
             </button>
+            {hasHeatmap && (
+                <button
+                    onClick={onRemoveHeatmap}
+                    className="cursor-pointer mt-2 px-8 py-3 w-full rounded-full bg-[#1a1a1a] dark:bg-[#ececeb] hover:bg-[#262626] dark:hover:bg-[#dcdcdc] font-medium transition-transform transform-gpu duration-300 active:translate-y-px border border-white/10 dark:border-black/10 backdrop-blur-md text-sm"
+                >
+                    {language === 'cs' ? 'Odebrat heatmapu' : 'Remove heatmap'}
+                </button>
+            )}
         </div>
     );
 }
