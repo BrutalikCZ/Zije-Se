@@ -23,6 +23,7 @@ export function QuestionnairePanel({ isOpen, onClose, isCollapsed, setIsCollapse
     const { language } = useLanguage();
     const [mode, setMode] = useState<'intro' | 'questionnaire' | 'result'>('intro');
     const [answers, setAnswers] = useState<Record<number, boolean>>({});
+    const [debugUnlocked, setDebugUnlocked] = useState(false);
 
     const { user, updateUser } = useAuth();
 
@@ -115,6 +116,27 @@ export function QuestionnairePanel({ isOpen, onClose, isCollapsed, setIsCollapse
         onClose();
     };
 
+    const handleDebugReset = async () => {
+        setDebugUnlocked(true);
+        setAnswers({});
+        if (user) {
+            try {
+                await fetch("/api/auth", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        action: "update_data",
+                        id: user.id,
+                        questionnaireData: {},
+                    }),
+                });
+                updateUser({ questionnaireData: {} });
+            } catch (err) {
+                console.error("Failed to reset questionnaire data", err);
+            }
+        }
+    };
+
     return (
         <SidebarLayout
             isOpen={isOpen}
@@ -174,6 +196,8 @@ export function QuestionnairePanel({ isOpen, onClose, isCollapsed, setIsCollapse
                                         handleBack={handleBack}
                                         handleNext={handleNext}
                                         handleFinish={handleFinish}
+                                        handleDebugReset={handleDebugReset}
+                                        debugUnlocked={debugUnlocked}
                                     />
                                 )}
                             >

@@ -9,13 +9,22 @@ interface QuestionnaireFooterProps {
     handleBack: () => void;
     handleNext: () => void;
     handleFinish: () => void;
+    handleDebugReset: () => void;
+    debugUnlocked: boolean;
 }
 
-export function QuestionnaireFooter({ currentStep, isLastStep, answeredCount, handleBack, handleNext, handleFinish }: QuestionnaireFooterProps) {
+export function QuestionnaireFooter({ currentStep, isLastStep, answeredCount, handleBack, handleNext, handleFinish, handleDebugReset, debugUnlocked }: QuestionnaireFooterProps) {
     const { language } = useLanguage();
 
     return (
-        <div className="shrink-0 border-t border-white/10 dark:border-black/10 py-4 flex items-center justify-between gap-2 text-xs">
+        <div className="shrink-0 border-t border-white/10 dark:border-black/10 py-4 flex flex-col gap-2 text-xs">
+            <button
+                onClick={handleDebugReset}
+                className="w-full px-2 py-1.5 rounded-full font-mono text-[10px] bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 border border-yellow-500/20 transition-colors cursor-pointer"
+            >
+                DEBUG
+            </button>
+            <div className="flex items-center justify-between gap-2">
             <button
                 onClick={handleBack}
                 disabled={currentStep === 1}
@@ -34,10 +43,10 @@ export function QuestionnaireFooter({ currentStep, isLastStep, answeredCount, ha
 
             <div className="flex flex-1 justify-center">
                 <button
-                    onClick={answeredCount >= 10 ? handleFinish : undefined}
-                    className={`group relative overflow-hidden px-2 py-2.5 rounded-full font-bold transition-all transform-gpu duration-300 border backdrop-blur-md flex items-center justify-center w-full max-w-[120px] ${answeredCount >= 10 ? 'bg-white hover:bg-gray-100 text-black dark:bg-[#0b0b0b] dark:text-white dark:hover:bg-[#1a1a1a] border border-transparent dark:border-black/10 active:translate-y-px shadow-md cursor-pointer' : 'bg-[#1a1a1a] dark:bg-[#ececeb] border-white/10 dark:border-black/10 text-white dark:text-black cursor-default opacity-80'}`}
+                    onClick={(answeredCount >= 10 || debugUnlocked) ? handleFinish : undefined}
+                    className={`group relative overflow-hidden px-2 py-2.5 rounded-full font-bold transition-all transform-gpu duration-300 border backdrop-blur-md flex items-center justify-center w-full max-w-[120px] ${(answeredCount >= 10 || debugUnlocked) ? 'bg-white hover:bg-gray-100 text-black dark:bg-[#0b0b0b] dark:text-white dark:hover:bg-[#1a1a1a] border border-transparent dark:border-black/10 active:translate-y-px shadow-md cursor-pointer' : 'bg-[#1a1a1a] dark:bg-[#ececeb] border-white/10 dark:border-black/10 text-white dark:text-black cursor-default opacity-80'}`}
                 >
-                    {answeredCount >= 10 ? (
+                    {(answeredCount >= 10 || debugUnlocked) ? (
                         <span>{language === 'cs' ? 'Vyhodnotit' : 'Evaluate'}</span>
                     ) : (
                         <>
@@ -66,6 +75,7 @@ export function QuestionnaireFooter({ currentStep, isLastStep, answeredCount, ha
                     <span>{language === 'cs' ? 'Další' : 'Next'}</span>
                 )}
             </button>
+            </div>
         </div>
     );
 }
