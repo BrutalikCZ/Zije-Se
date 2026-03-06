@@ -11,6 +11,70 @@ const GEMINI_PRIMARY = USE_GEMINI_THREE
     : 'gemini-2.5-flash';
 const GEMINI_FALLBACK = USE_GEMINI_THREE ? 'gemini-2.5-flash' : 'gemini-2.0-flash';
 
+const SRLHF_FILE = path.join(process.cwd(), 'public', 'data', 'guidelines.json');
+
+function loadSRLHFContext(): string {
+    try {
+        if (!fs.existsSync(SRLHF_FILE)) return '';
+
+        const data = JSON.parse(fs.readFileSync(SRLHF_FILE, 'utf-8'));
+        const g = data.guidelines;
+        if (!g) return '';
+
+        const parts: string[] = [];
+
+        if (g.avoid?.length > 0) {
+            parts.push('VYVARUJ SE:\n' + g.avoid.map((r: any) => `- ${r.rule}`).join('\n'));
+        }
+        if (g.improve?.length > 0) {
+            parts.push('ZLEPŠI:\n' + g.improve.map((r: any) => `- ${r.rule}`).join('\n'));
+        }
+        if (g.keepDoing?.length > 0) {
+            parts.push('POKRAČUJ V:\n' + g.keepDoing.map((r: any) => `- ${r.rule}`).join('\n'));
+        }
+
+        if (parts.length === 0) return '';
+
+        const totalRules = (g.avoid?.length || 0) + (g.improve?.length || 0) + (g.keepDoing?.length || 0);
+        console.log(`[SRLHF] Loaded ${totalRules} rules from guidelines.json`);
+
+        return `\n# NAUČENÁ PRAVIDLA Z FEEDBACKU UŽIVATELŮ (dodržuj je STRIKTNĚ)\n\n${parts.join('\n\n')}`;
+    } catch (err) {
+        console.warn('[SRLHF] Failed to load guidelines:', err);
+        return '';
+    }
+}
+
+interface ImplicitFeedback {
+    type: 'positive' | 'negative';
+    description: string;
+}
+
+function processImplicitFeedbackAsync(feedback: ImplicitFeedback, lastAssistantMsg: string, conversationContext: ChatMessage[],) {
+    const baseUrl = process.env.NEXTAUTH_URL || process.env.VERCEL_URL || 'http://localhost:3000';
+
+    const body = {
+        type: feedback.type,
+        description: `[IMPLICITNÍ] ${feedback.description}`,
+        assistantMessage: lastAssistantMsg.slice(0, 800),
+        conversationContext: conversationContext
+            .filter(m => m.role !== 'system')
+            .slice(-6)
+            .map(m => ({ role: m.role, content: m.content.slice(0, 300) })),
+    };
+
+    fetch(`${baseUrl}/api/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    })
+        .then(res => {
+            if (res.ok) console.log(`[SRLHF] Implicit ${feedback.type} feedback processed`);
+            else console.warn(`[SRLHF] Feedback API returned ${res.status}`);
+        })
+        .catch(err => console.warn('[SRLHF] Implicit feedback call failed:', err.message));
+}
+
 interface ChatMessage {
     role: 'system' | 'user' | 'assistant';
     content: string;
@@ -26,6 +90,10 @@ interface ExtractionResult {
     keywords: string[];
     selectedFiles: string[];
     isConversational: boolean;
+    implicitFeedback: {
+        type: 'positive' | 'negative';
+        description: string;
+    } | null;
 }
 
 interface SearchResult {
@@ -155,19 +223,39 @@ Tvůj úkol:
 1. Extrahuj klíčová slova z dotazu uživatele (typ nemovitosti, požadavky, lokalita, apod.)
 2. Podívej se na seznam dostupných GeoJSON souborů a vyber 0–5 souborů, které mohou být relevantní. Vybírej podle názvu souboru a cesty.
 3. Urči, zda je dotaz konverzační (pozdrav, otázka na funkce) nebo analytický (hledá konkrétní data).
+4. Detekuj, zda zpráva uživatele obsahuje IMPLICITNÍ ZPĚTNOU VAZBU na předchozí odpověď AI — pochvalu, kritiku, opravu informace nebo nespokojenost. Analyzuj VÝZNAM a SENTIMENT, ne jen klíčová slova.
+
+Příklady implicitní zpětné vazby:
+- "Jsi borec" → positive, "Uživatel chválí kvalitu odpovědi"
+- "To se ti nepovedlo" → negative, "Uživatel je nespokojen s odpovědí"
+- "Ta škola tam není, je to v Žižkově" → negative, "Uživatel opravuje: škola je v Žižkově, ne kde AI tvrdil"
+- "Díky, přesně tohle jsem hledal" → positive, "Uživatel potvrzuje relevanci"
+- "To je blbost" → negative, "Uživatel považuje informaci za chybnou"
+- "Hm, to mi moc nepomohlo" → negative, "Odpověď nebyla užitečná"
+- "Super, jen bych chtěl víc detailů" → positive, "Odpověď je dobrá ale málo detailní"
+
+Pokud zpráva NEOBSAHUJE žádnou zpětnou vazbu (je to čistý dotaz), nastav implicitFeedback na null.
 
 Odpověz POUZE validním JSON objektem, nic jiného:
 {
   "keywords": ["klíčové", "slovo", "další"],
-  "selectedFiles": ["cesta/soubor1.geojson", "cesta/soubor2.geojson"],
-  "isConversational": false
+  "selectedFiles": ["cesta/soubor1.geojson"],
+  "isConversational": false,
+  "implicitFeedback": {
+    "type": "positive",
+    "description": "Stručný popis co uživatel sděluje (max 1 věta)"
+  }
 }
 
-Pokud je dotaz konverzační (pozdrav, díky, jak to funguje apod.), vrať:
+Pokud zpráva neobsahuje zpětnou vazbu:
+  "implicitFeedback": null
+
+Pokud je dotaz čistě konverzační (pozdrav, díky bez kontextu):
 {
   "keywords": [],
   "selectedFiles": [],
-  "isConversational": true
+  "isConversational": true,
+  "implicitFeedback": null
 }`;
 
 function parseExtractionResult(raw: string): ExtractionResult {
@@ -176,25 +264,39 @@ function parseExtractionResult(raw: string): ExtractionResult {
         const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
         if (!jsonMatch) throw new Error('No JSON found');
         const parsed = JSON.parse(jsonMatch[0]);
+
+        let implicitFeedback: ExtractionResult['implicitFeedback'] = null;
+        if (parsed.implicitFeedback && parsed.implicitFeedback.type) {
+            implicitFeedback = {
+                type: parsed.implicitFeedback.type === 'positive' ? 'positive' : 'negative',
+                description: String(parsed.implicitFeedback.description || '').slice(0, 500),
+            };
+        }
+
         return {
             keywords: Array.isArray(parsed.keywords) ? parsed.keywords : [],
             selectedFiles: Array.isArray(parsed.selectedFiles) ? parsed.selectedFiles : [],
             isConversational: !!parsed.isConversational,
+            implicitFeedback,
         };
     } catch (err) {
         console.warn('[AI] Extraction parse failed, assuming conversational:', err);
-        return { keywords: [], selectedFiles: [], isConversational: true };
+        return { keywords: [], selectedFiles: [], isConversational: true, implicitFeedback: null };
     }
 }
 
-async function llmStepExtract(userMessage: string, availableFiles: string[], callLLM: (messages: ChatMessage[]) => Promise<string>): Promise<ExtractionResult> {
+async function llmStepExtract(userMessage: string, availableFiles: string[], lastAssistantContent: string | null, callLLM: (messages: ChatMessage[]) => Promise<string>): Promise<ExtractionResult> {
     const fileList = availableFiles.length > 0
         ? `Dostupné GeoJSON soubory:\n${availableFiles.map(f => `- ${f}`).join('\n')}`
         : 'Žádné GeoJSON soubory nejsou dostupné.';
 
+    const contextPart = lastAssistantContent
+        ? `\nPoslední odpověď AI (pro detekci zpětné vazby):\n"${lastAssistantContent.slice(0, 400)}"\n`
+        : '';
+
     const messages: ChatMessage[] = [
         { role: 'system', content: EXTRACTION_SYSTEM_PROMPT },
-        { role: 'user', content: `${fileList}\n\nDotaz uživatele: "${userMessage}"` },
+        { role: 'user', content: `${fileList}${contextPart}\nDotaz uživatele: "${userMessage}"` },
     ];
 
     console.log('[AI Step 1] Extracting keywords...');
@@ -329,6 +431,18 @@ Tvůj úkol:
 2. Ze seznamu GeoJSON souborů vyber 0–5 relevantních podle názvu/cesty.
 3. Urči, zda je dotaz konverzační nebo analytický.
 4. Pokud uživatel hledá konkrétní typ místa, vygeneruj json:pois blok.
+5. Detekuj, zda zpráva uživatele obsahuje IMPLICITNÍ ZPĚTNOU VAZBU na předchozí odpověď AI. Analyzuj VÝZNAM a SENTIMENT celé zprávy, ne jen jednotlivá slova.
+
+Příklady implicitní zpětné vazby:
+- "Jsi borec" → positive, "Uživatel chválí kvalitu odpovědi"
+- "To se ti bohužel nepovedlo" → negative, "Uživatel je nespokojen s kvalitou odpovědi"
+- "Ta škola tam není, je to v Žižkově" → negative, "Uživatel opravuje: škola je v Žižkově"
+- "Díky, přesně to" → positive, "Uživatel potvrzuje relevanci"
+- "Hm, to mi moc nepomohlo" → negative, "Odpověď nebyla užitečná"
+- "Super, jen bych chtěl víc detailů" → positive, "Dobrá odpověď ale málo detailní"
+- "Najdi mi školu v Praze" → žádný feedback (čistý dotaz) → null
+
+Pokud zpráva NEOBSAHUJE zpětnou vazbu, nastav implicitFeedback na null.
 
 Odpověz takto — NEJDŘÍVE JSON blok, pak volitelně mapové příkazy:
 
@@ -336,9 +450,16 @@ Odpověz takto — NEJDŘÍVE JSON blok, pak volitelně mapové příkazy:
 {
   "keywords": ["klíčové", "slovo"],
   "selectedFiles": ["cesta/soubor.geojson"],
-  "isConversational": false
+  "isConversational": false,
+  "implicitFeedback": {
+    "type": "negative",
+    "description": "Uživatel říká že odpověď nebyla přesná"
+  }
 }
 \`\`\`
+
+Pokud zpráva neobsahuje zpětnou vazbu:
+  "implicitFeedback": null
 
 Pokud uživatel hledá místa, PŘIDEJ json:pois blok (Google Places typy):
 \`\`\`json:pois
@@ -354,7 +475,8 @@ Pokud je dotaz konverzační:
 {
   "keywords": [],
   "selectedFiles": [],
-  "isConversational": true
+  "isConversational": true,
+  "implicitFeedback": null
 }
 \`\`\`
 
@@ -376,6 +498,11 @@ async function geminiStepExtract(userMessage: string, availableFiles: string[], 
         .map(m => m.content)
         .join('\n');
 
+    const lastAssistant = [...conversationMessages].reverse().find(m => m.role === 'assistant');
+    const assistantContext = lastAssistant
+        ? `\nPoslední odpověď AI (pro detekci zpětné vazby):\n"${lastAssistant.content.slice(0, 400)}"`
+        : '';
+
     const messages: ChatMessage[] = [
         { role: 'system', content: GEMINI_EXTRACTION_PROMPT },
     ];
@@ -386,14 +513,14 @@ async function geminiStepExtract(userMessage: string, availableFiles: string[], 
 
     messages.push({
         role: 'user',
-        content: `${fileList}\n\nDotaz uživatele: "${userMessage}"`,
+        content: `${fileList}${assistantContext}\n\nDotaz uživatele: "${userMessage}"`,
     });
 
     console.log('[AI Gemini Step 1] Extracting keywords + POIs...');
     const raw = await call_gemini(messages);
     console.log('[AI Gemini Step 1] Raw:', raw.slice(0, 800));
 
-    let extraction: ExtractionResult = { keywords: [], selectedFiles: [], isConversational: true };
+    let extraction: ExtractionResult = { keywords: [], selectedFiles: [], isConversational: true, implicitFeedback: null };
     const extractionMatch = raw.match(/```json:extraction\s*([\s\S]*?)```/);
     if (extractionMatch) {
         extraction = parseExtractionResult(extractionMatch[1]);
@@ -543,12 +670,10 @@ async function fetchPlacesForPoi(apiKey: string, poiReq: any): Promise<any[]> {
     let lng: number | null = poiReq.lng ?? null;
     let radius = poiReq.radius != null ? Math.max(100, Math.min(50000, Number(poiReq.radius))) : 1000;
 
-    // Resolve placeName to coordinates
     if (poiReq.placeName && (lat == null || lng == null)) {
         const resolved = await nominatimResolve(poiReq.placeName);
         if (resolved) { lat = resolved.lat; lng = resolved.lng; radius = resolved.radius; }
         else {
-            // Retry without "Česká republika"
             const stripped = poiReq.placeName.replace(/,?\s*Česká republika/i, '').trim();
             if (stripped !== poiReq.placeName) {
                 const resolved2 = await nominatimResolve(stripped);
@@ -561,21 +686,19 @@ async function fetchPlacesForPoi(apiKey: string, poiReq: any): Promise<any[]> {
         return [];
     }
 
-    // Build search keyword from available fields
     const searchKeyword = poiReq.keyword || poiReq.label || poiReq.type || '';
 
-    // Strategy: try text search first (most flexible), then nearby, then retry with wider radius
     const attempts: { method: 'text' | 'nearby'; searchRadius: number }[] = [];
 
     if (searchKeyword) {
         attempts.push({ method: 'text', searchRadius: radius });
-        attempts.push({ method: 'text', searchRadius: Math.min(radius * 3, 50000) }); // wider retry
+        attempts.push({ method: 'text', searchRadius: Math.min(radius * 3, 50000) });
     }
     if (poiReq.type) {
         attempts.push({ method: 'nearby', searchRadius: radius });
-        attempts.push({ method: 'nearby', searchRadius: Math.min(radius * 3, 50000) }); // wider retry
+        attempts.push({ method: 'nearby', searchRadius: Math.min(radius * 3, 50000) });
     }
-    // Last resort: text search with just the label
+    
     if (!searchKeyword && poiReq.label) {
         attempts.push({ method: 'text', searchRadius: Math.min(radius * 3, 50000) });
     }
@@ -678,14 +801,6 @@ function buildPlacesContextForAI(results: { label: string; places: any[]; found:
     return lines.join('\n');
 }
 
-// ── Context Helpers ──────────────────────────────────────────────────────────
-
-/**
- * Extract coordinate/tile context from system messages and separate
- * clean conversation messages (user + assistant only) for the final LLM call.
- * This prevents the frontend's generic SYSTEM_PROMPT from conflicting with
- * our specific pipeline prompts.
- */
 function extractConversationContext(messages: ChatMessage[]): {
     coordinateContext: string;
     cleanMessages: ChatMessage[];
@@ -695,15 +810,14 @@ function extractConversationContext(messages: ChatMessage[]): {
 
     for (const msg of messages) {
         if (msg.role === 'system') {
-            // Extract coordinate/tile context from system messages
             if (msg.content.includes('zeměpisná šířka') || msg.content.includes('souřadnice') || msg.content.includes('dlaždice')) {
                 coordParts.push(msg.content);
             }
-            // Also keep questionnaire data
+
             if (msg.content.includes('dotazník') || msg.content.includes('preference bydlení')) {
                 coordParts.push(msg.content);
             }
-            // Skip everything else (frontend's generic SYSTEM_PROMPT etc.)
+            // Skip everything else
         } else {
             cleanMessages.push(msg);
         }
@@ -726,14 +840,18 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'No user message found' }, { status: 400 });
         }
 
+        const lastAssistantMsg = [...conversationMessages].reverse().find(m => m.role === 'assistant');
+
         const geoFiles = listGeoJsonFiles();
 
-        // Extract coordinate context and clean conversation messages
         const { coordinateContext, cleanMessages } = extractConversationContext(conversationMessages);
+
+        const srlhfContext = loadSRLHFContext();
 
         console.log("\n" + "=".repeat(60));
         console.log(`[AI] Model: ${model}${model === 'gemini' ? ` (${GEMINI_PRIMARY}, fallback: ${GEMINI_FALLBACK})` : ''}`);
         console.log(`[AI] GeoJSON files: ${geoFiles.length}`);
+        console.log(`[AI] SRLHF rules: ${srlhfContext ? 'loaded' : 'none'}`);
         console.log(`[AI] Conversation messages: ${conversationMessages.length} (clean: ${cleanMessages.length})`);
         console.log(`[AI] Coordinate context: ${coordinateContext ? 'yes' : 'none'}`);
         console.log(`[AI] User query: "${lastUserMsg.content.slice(0, 150)}"`);
@@ -753,6 +871,11 @@ export async function POST(request: NextRequest) {
             );
             console.log(`[AI Gemini] Extraction:`, extraction);
             console.log(`[AI Gemini] POI commands: ${extractedPois.length}`);
+
+            if (extraction.implicitFeedback && lastAssistantMsg) {
+                console.log(`[SRLHF] LLM detected implicit ${extraction.implicitFeedback.type}: "${extraction.implicitFeedback.description}"`);
+                processImplicitFeedbackAsync(extraction.implicitFeedback, lastAssistantMsg.content, conversationMessages);
+            }
 
             step1Pois = extractedPois.length > 0 ? extractedPois : null;
 
@@ -807,7 +930,7 @@ export async function POST(request: NextRequest) {
 
             if (extraction.isConversational) {
                 const messages: ChatMessage[] = [
-                    { role: 'system', content: CONVERSATIONAL_PROMPT },
+                    { role: 'system', content: CONVERSATIONAL_PROMPT + srlhfContext },
                     ...(coordinateContext ? [{ role: 'system' as const, content: coordinateContext }] : []),
                     ...cleanMessages,
                 ];
@@ -821,7 +944,7 @@ export async function POST(request: NextRequest) {
                 );
 
                 const messages: ChatMessage[] = [
-                    { role: 'system', content: finalPrompt },
+                    { role: 'system', content: finalPrompt + srlhfContext },
                     ...(coordinateContext ? [{ role: 'system' as const, content: `Kontext uživatele:\n${coordinateContext}` }] : []),
                     ...cleanMessages,
                 ];
@@ -846,9 +969,15 @@ export async function POST(request: NextRequest) {
             const extraction = await llmStepExtract(
                 lastUserMsg.content,
                 geoFiles,
+                lastAssistantMsg?.content || null,
                 (msgs) => call_ollama(msgs, actualModel),
             );
             console.log(`[AI Ollama] Extraction:`, extraction);
+
+            if (extraction.implicitFeedback && lastAssistantMsg) {
+                console.log(`[SRLHF] LLM detected implicit ${extraction.implicitFeedback.type}: "${extraction.implicitFeedback.description}"`);
+                processImplicitFeedbackAsync(extraction.implicitFeedback, lastAssistantMsg.content, conversationMessages);
+            }
 
             let searchResults: SearchResult[] = [];
             if (!extraction.isConversational && extraction.keywords.length > 0) {
@@ -856,9 +985,9 @@ export async function POST(request: NextRequest) {
             }
             console.log(`[AI Ollama] Search: ${searchResults.length} files with matches`);
 
-            const systemPrompt = extraction.isConversational
+            const systemPrompt = (extraction.isConversational
                 ? CONVERSATIONAL_PROMPT
-                : buildOllamaResponsePrompt(searchResults, extraction);
+                : buildOllamaResponsePrompt(searchResults, extraction)) + srlhfContext;
 
             const step3Messages: ChatMessage[] = [
                 { role: 'system', content: systemPrompt },
