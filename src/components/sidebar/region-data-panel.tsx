@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { SidebarLayout } from './sidebar-layout';
 import { useLanguage } from '@/components/providers/language-provider';
-import { ChevronDown, Settings2, Database, Map } from 'lucide-react';
+import { ChevronDown, Settings2, Database, Map, Folder } from 'lucide-react';
 import { ALL_CATEGORIES } from '@/lib/data-mapping';
 
 interface RegionDataPanelProps {
@@ -100,9 +100,12 @@ export function RegionDataPanel({
                                     disabled={!hasData}
                                     className={`group px-5 py-3 w-full text-sm font-medium rounded-full bg-[#1a1a1a] dark:bg-[#ececeb] text-white dark:text-black hover:bg-[#222222] dark:hover:bg-[#dcdcdc] border border-white/10 dark:border-black/10 flex items-center justify-between transition-all transform-gpu duration-300 ease-in-out ${!hasData ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer active:translate-y-px'} ${isOpen ? 'mb-1' : ''}`}
                                 >
-                                    <span className="flex-1 text-left truncate">
-                                        {category.label}
-                                    </span>
+                                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                                        <Folder size={13} className="shrink-0 opacity-60" />
+                                        <span className="flex-1 text-left truncate">
+                                            {category.label}
+                                        </span>
+                                    </div>
                                     {hasData && (
                                         <div className="flex items-center gap-1.5 shrink-0 ml-2">
                                             <span className="text-[11px] tabular-nums opacity-50 font-mono bg-white/10 dark:bg-black/10 px-1.5 py-0.5 rounded-full">

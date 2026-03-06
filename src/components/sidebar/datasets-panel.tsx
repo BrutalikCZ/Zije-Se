@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Database, File, ChevronDown, Settings2, Globe, AlertCircle } from 'lucide-react';
+import { Database, File, ChevronDown, Settings2, Globe, AlertCircle, Folder } from 'lucide-react';
 import { useLanguage } from '@/components/providers/language-provider';
 import { SidebarLayout } from './sidebar-layout';
 import { WFS_SERVICES, WfsService, wfsLayerKey } from '@/lib/wfs-services';
@@ -23,10 +23,10 @@ interface DatasetsPanelProps {
 
 function FileTreeNode({ node, level = 0, activeLayers, toggleLayer, insideTree = false }: { node: FileNode; level?: number; activeLayers: Record<string, boolean>; toggleLayer: (layerPath: string, value: boolean) => void; insideTree?: boolean; }) {
     const [expanded, setExpanded] = useState(false);
-    const isDir = node.type === 'directory' || (node.type === 'file' && node.name.endsWith('.geojson'));
-    const isProperty = node.type === 'property';
+    const isDir = node.type === 'directory';
+    const isLayer = node.type === 'property' || (node.type === 'file' && node.name.endsWith('.geojson'));
     const layerPath = node.path ? node.path.replace(/^\/data\//, '') : '';
-    const isActive = isProperty ? !!activeLayers[layerPath] : false;
+    const isActive = isLayer ? !!activeLayers[layerPath] : false;
 
     if (isDir) {
         return (
@@ -37,8 +37,9 @@ function FileTreeNode({ node, level = 0, activeLayers, toggleLayer, insideTree =
                     className={`group px-5 py-3 w-full text-sm font-medium rounded-full bg-[#1a1a1a] dark:bg-[#ececeb] text-white dark:text-black hover:bg-[#222222] dark:hover:bg-[#dcdcdc] border border-white/10 dark:border-black/10 flex items-center justify-between transition-all transform-gpu duration-300 ease-in-out cursor-pointer active:translate-y-px relative z-10 ${expanded ? 'mb-1' : ''}`}
                 >
                     <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <Folder size={13} className="shrink-0 opacity-60" />
                         <span className="flex-1 text-left truncate">
-                            {node.name.replace('.geojson', '')}
+                            {node.name.replace('.geojson', '').split('(')[0].replace(/_+/g, ' ').trim()}
                         </span>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0 ml-2">
@@ -68,7 +69,7 @@ function FileTreeNode({ node, level = 0, activeLayers, toggleLayer, insideTree =
     return (
         <label className="relative flex items-center gap-3 cursor-pointer py-1.5 pl-3 pr-2 group rounded-xl hover:bg-white/5 dark:hover:bg-black/5 transition-colors border border-transparent hover:border-white/5 dark:hover:border-black/5">
             {insideTree && <div className="absolute left-[-12px] top-1/2 w-3 h-px bg-white/10 dark:bg-black/10" />}
-            {isProperty ? (
+            {isLayer ? (
                 <div className="relative flex items-center shrink-0">
                     <input
                         type="checkbox"
@@ -84,8 +85,8 @@ function FileTreeNode({ node, level = 0, activeLayers, toggleLayer, insideTree =
                     <File size={14} />
                 </div>
             )}
-            <span className={`text-[13px] font-medium truncate opacity-70 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all w-full flex-1 ${isProperty && isActive ? 'text-[#3388ff]' : ''}`} title={node.name}>
-                {node.name.replace(/_/g, ' ')}
+            <span className={`text-[13px] font-medium truncate opacity-70 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all w-full flex-1 ${isLayer && isActive ? 'text-[#3388ff]' : ''}`} title={node.name}>
+                {node.name.replace('.geojson', '').split('(')[0].replace(/_+/g, ' ').trim()}
             </span>
         </label>
     );

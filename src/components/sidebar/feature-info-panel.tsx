@@ -38,8 +38,18 @@ export function FeatureInfoPanel({ isOpen, onClose, clickedFeatures }: FeatureIn
         }
     });
 
-    const formatPropName = (key: string) => {
-        return key;
+    const formatPropName = (val: string) => {
+        return val.replace(/_+/g, ' ').trim();
+    };
+
+    const formatLayerName = (id: string) => {
+        // WFS layer ID format: wfs::url::typeName or wfs-wfs::url::typeName
+        if (id.includes('::')) {
+            const parts = id.split('::');
+            const typeName = parts[parts.length - 1];
+            return formatPropName(typeName);
+        }
+        return formatPropName(id.split('?')[0]);
     };
 
     return (
@@ -71,7 +81,7 @@ export function FeatureInfoPanel({ isOpen, onClose, clickedFeatures }: FeatureIn
             <div className="h-px w-full bg-white/10 dark:bg-black/10 shrink-0 my-4 relative z-10"></div>
 
             {/* Content */}
-            <div className="flex-1 overflow-y-auto pr-2 relative z-10 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+            <div className="flex-1 overflow-y-auto pr-2 relative z-10 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent" data-lenis-prevent>
                 {Object.keys(grouped).length === 0 ? (
                     <div className="text-sm opacity-50 text-center mt-10">
                         {language === 'cs' ? 'Žádná detailní data na vybraném místě' : 'No detailed data at the selected location'}
@@ -80,7 +90,7 @@ export function FeatureInfoPanel({ isOpen, onClose, clickedFeatures }: FeatureIn
                     <div className="flex flex-col gap-4">
                         {Object.entries(grouped).map(([layerId, features]) => {
                             const isCollapsed = collapsedLayers[layerId];
-                            const displayName = layerId.split('?')[0]; // Remove query params if any
+                            const displayName = formatLayerName(layerId);
 
                             return (
                                 <div key={layerId} className="border border-white/10 dark:border-black/10 rounded-xl overflow-hidden bg-[#1a1a1a] dark:bg-[#ececeb] transition-all">
@@ -107,8 +117,8 @@ export function FeatureInfoPanel({ isOpen, onClose, clickedFeatures }: FeatureIn
                                                     <div key={idx} className="bg-[#0b0b0b]/50 dark:bg-white/50 p-3.5 rounded-lg flex flex-col gap-2.5">
                                                         {visibleProps.map(([k, v], i) => (
                                                             <div key={i} className="text-[12px] flex flex-col gap-0.5">
-                                                                <span className="opacity-60 font-medium text-[11px] uppercase tracking-wider">{formatPropName(k)}</span>
-                                                                <span className="font-medium text-[13px] break-words">{String(v)}</span>
+                                                                <span className="opacity-60 font-medium text-[11px] tracking-wider">{formatPropName(k)}</span>
+                                                                <span className="font-medium text-[13px] break-words">{typeof v === 'string' ? formatPropName(v) : String(v)}</span>
                                                             </div>
                                                         ))}
                                                     </div>
