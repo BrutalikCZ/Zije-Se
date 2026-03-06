@@ -1,0 +1,53 @@
+1 město
+2 povodeň (Na to datasety jsou, stačí je vyřadit)
+3 busStops
+4 existuje
+5
+6
+7industry
+8
+9
+10
+11
+12
+13 library
+14 airport (máme dataset)
+15 OTÁZKU PŘEPSAT NA HRADY (máme hrady)
+16
+17
+18
+19 naštudovat datasety
+20
+21
+22 naturalPark bude v nějakém datasetu
+23
+24
+25
+26
+27
+28
+29 agro
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40 muzeum
+41
+42 castles
+43 pouzit socialFacility
+44
+45
+46
+47
+48
+49 (parking?)
+50
+
+
+vratit live performance pro zivou hudbu

@@ -15,7 +15,7 @@ interface QuestionnairePanelProps {
     onClose: () => void;
     isCollapsed: boolean;
     setIsCollapsed: (v: boolean) => void;
-    onEvaluated?: () => void;
+    onEvaluated?: (answers: Record<number, boolean>) => void;
     onLoginClick?: () => void;
 }
 
@@ -28,7 +28,19 @@ export function QuestionnairePanel({ isOpen, onClose, isCollapsed, setIsCollapse
 
     React.useEffect(() => {
         if (user?.questionnaireData && Object.keys(answers).length === 0) {
-            setAnswers(user.questionnaireData);
+            // Fix: Clean up null values that might have been saved in DB if it was serialized as an array
+            const cleanData: Record<number, boolean> = {};
+
+            if (Array.isArray(user.questionnaireData)) {
+                user.questionnaireData.forEach((val, i) => {
+                    if (val === true || val === false) cleanData[i] = val;
+                });
+            } else if (typeof user.questionnaireData === 'object') {
+                Object.entries(user.questionnaireData).forEach(([key, val]) => {
+                    if (val === true || val === false) cleanData[parseInt(key, 10)] = val as boolean;
+                });
+            }
+            setAnswers(cleanData);
         }
     }, [user, isOpen]);
 
@@ -39,11 +51,16 @@ export function QuestionnairePanel({ isOpen, onClose, isCollapsed, setIsCollapse
     const isFinished = answeredCount === questions.length;
     const hasHistory = answeredCount > 0;
 
-    const firstUnansweredIndex = questions.findIndex((_, i) => answers[i] === undefined);
+    const firstUnansweredIndex = questions.findIndex((_, i) => answers[i] === undefined || answers[i] === null);
     const calculatedInitialStep = firstUnansweredIndex === -1 ? 1 : firstUnansweredIndex + 1;
 
     const handleAnswer = (index: number, answer: boolean) => {
-        setAnswers(prev => ({ ...prev, [index]: answer }));
+        console.log(`Otázka ${index} zodpovězena:`, answer);
+        setAnswers(prev => {
+            const newAnswers = { ...prev, [index]: answer };
+            console.log("Aktuální stav odpovědí:", newAnswers);
+            return newAnswers;
+        });
         if (stepperRef.current) {
             setTimeout(() => {
                 stepperRef.current.nextStep();
@@ -75,7 +92,7 @@ export function QuestionnairePanel({ isOpen, onClose, isCollapsed, setIsCollapse
         }
 
         if (onEvaluated) {
-            onEvaluated();
+            onEvaluated(answers);
         }
         setMode('result');
     };

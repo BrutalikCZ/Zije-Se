@@ -78,6 +78,7 @@ export default function AppPage() {
         { key: 'transportScore', labelCs: 'Doprava', labelEn: 'Transport' },
         { key: 'cultureScore', labelCs: 'Kultura', labelEn: 'Culture' },
         { key: 'otherScore', labelCs: 'Ostatní', labelEn: 'Other' },
+        { key: 'stopsScore', labelCs: 'Zastávky', labelEn: 'Stops' },
     ] as const;
 
     // Unified step-based color scale for all categories
@@ -102,6 +103,63 @@ export default function AppPage() {
     const [highlightedTilesData, setHighlightedTilesData] = useState<GeoJSON.FeatureCollection | null>(null);
     const [aiPoiData, setAiPoiData] = useState<GeoJSON.FeatureCollection | null>(null);
     const [aiLocationData, setAiLocationData] = useState<GeoJSON.FeatureCollection | null>(null);
+
+    const [questionnaireHeatmapData, setQuestionnaireHeatmapData] = useState<GeoJSON.FeatureCollection | null>(null);
+
+    // Mapování otázek na kategorie a typ vlivu specifikované v dotazníku
+    // Type: 'positive' (přidává +1 k počtu shod), 'blacklist' (vyloučí dlaždici pokud v dané kat. má skóre > 0)
+    const QUESTION_CATEGORY_MAP: Record<number, { category: string, type: 'positive' | 'blacklist', threshold?: number }> = {
+        0: { category: 'otherScore', type: 'positive' },
+        1: { category: 'otherScore', type: 'blacklist' }, // záplavy -> proxy
+        2: { category: 'stopsScore', type: 'positive', threshold: 1 },
+        3: { category: 'healthcareScore', type: 'positive' },
+        4: { category: 'educationScore', type: 'positive' },
+        5: { category: 'otherScore', type: 'blacklist' }, // hluk -> proxy
+        6: { category: 'otherScore', type: 'positive' },
+        7: { category: 'transportScore', type: 'positive' },
+        8: { category: 'transportScore', type: 'positive' },
+        9: { category: 'otherScore', type: 'blacklist' }, // ovzduší -> proxy
+        10: { category: 'otherScore', type: 'positive' },
+        11: { category: 'healthcareScore', type: 'positive' },
+        12: { category: 'cultureScore', type: 'positive' },
+        13: { category: 'otherScore', type: 'positive' },
+        14: { category: 'cultureScore', type: 'positive' },
+        15: { category: 'otherScore', type: 'positive' },
+        16: { category: 'otherScore', type: 'positive' },
+        17: { category: 'healthcareScore', type: 'positive' },
+        18: { category: 'otherScore', type: 'blacklist' }, // vedra -> proxy
+        19: { category: 'cultureScore', type: 'positive' },
+        20: { category: 'otherScore', type: 'positive' },
+        21: { category: 'otherScore', type: 'positive' },
+        22: { category: 'otherScore', type: 'positive' },
+        23: { category: 'cultureScore', type: 'positive' },
+        24: { category: 'cultureScore', type: 'positive' },
+        25: { category: 'otherScore', type: 'positive' },
+        26: { category: 'otherScore', type: 'positive' },
+        27: { category: 'otherScore', type: 'positive' },
+        28: { category: 'otherScore', type: 'positive' },
+        29: { category: 'otherScore', type: 'positive' },
+        30: { category: 'educationScore', type: 'positive' },
+        31: { category: 'otherScore', type: 'blacklist' }, // větrná eroze -> proxy
+        32: { category: 'cultureScore', type: 'positive' },
+        33: { category: 'otherScore', type: 'positive' },
+        34: { category: 'cultureScore', type: 'positive' },
+        35: { category: 'otherScore', type: 'positive' },
+        36: { category: 'cultureScore', type: 'positive' },
+        37: { category: 'cultureScore', type: 'positive' },
+        38: { category: 'cultureScore', type: 'positive' },
+        39: { category: 'healthcareScore', type: 'positive' },
+        40: { category: 'healthcareScore', type: 'positive' },
+        41: { category: 'cultureScore', type: 'positive' },
+        42: { category: 'otherScore', type: 'positive' },
+        43: { category: 'otherScore', type: 'positive' },
+        44: { category: 'healthcareScore', type: 'positive' },
+        45: { category: 'cultureScore', type: 'positive' },
+        46: { category: 'otherScore', type: 'positive' },
+        47: { category: 'otherScore', type: 'positive' },
+        48: { category: 'otherScore', type: 'positive' },
+        49: { category: 'otherScore', type: 'positive' },
+    };
 
     // Compute centroid of a polygon (simple average of coordinates)
     const getPolygonCentroid = useCallback((feature: GeoJSON.Feature): [number, number] | null => {
@@ -131,7 +189,7 @@ export default function AppPage() {
         if (!clickedCenter) return;
 
         // Compute distances from clicked tile to all tiles
-        const withDistances = heatmapData.features
+        const withDistances = (heatmapData || questionnaireHeatmapData).features
             .map(f => {
                 const center = getPolygonCentroid(f);
                 if (!center) return null;
@@ -188,6 +246,7 @@ export default function AppPage() {
         setLayerOpacity(0.8);
         setMapOpacity(1.0);
         setActiveHeatmaps({});
+        setQuestionnaireHeatmapData(null);
     };
 
     useEffect(() => {
@@ -202,12 +261,102 @@ export default function AppPage() {
             .catch(err => console.error("Chyba při načítání souborů:", err));
     }, []);
 
-    const handleQuestionnaireEvaluated = () => {
-        const newHeatmaps: Record<string, boolean> = {};
-        HEATMAP_CATEGORIES.forEach(cat => {
-            newHeatmaps[cat.key] = true;
+    const handleQuestionnaireEvaluated = async (answers: Record<number, boolean>) => {
+        console.log("=== DOTAZNÍK: ZAČÁTEK VYHODNOCENÍ ===");
+        console.log("Odpovědi z panelu:", answers);
+
+        // Získat aktuální data
+        let currentTilesData = heatmapData;
+
+        if (!currentTilesData) {
+            try {
+                const resp = await fetch('/data/tiles_database_final_purged.json');
+                const data = await resp.json();
+                const featureList = Array.isArray(data) ? data : (data.features || []);
+                currentTilesData = {
+                    type: 'FeatureCollection',
+                    features: featureList
+                };
+                setHeatmapData(currentTilesData);
+            } catch (err) {
+                console.error("Chyba při stahování hodnot pro heatmapu:", err);
+                return;
+            }
+        }
+
+        const positiveQuestions = Object.entries(answers).filter(([index, answer]) => {
+            const mapped = QUESTION_CATEGORY_MAP[parseInt(index, 10)];
+            return answer === true && mapped && mapped.type === 'positive';
         });
-        setActiveHeatmaps(newHeatmaps);
+
+        const totalPositiveYes = positiveQuestions.length;
+        console.log("Počet pozitivních 'Ano' odpovědí (chci tam X):", totalPositiveYes);
+        console.log("Které to jsou:", positiveQuestions);
+
+        if (totalPositiveYes === 0 && Object.keys(answers).length > 0) {
+            // Nemáme žádné pozitivní shody, ale můžeme mít blacklist
+            // V reálu by se to mělo ošetřit jinak, zatím dáme prázdný dataset
+        }
+
+        const processedFeatures = currentTilesData.features.map(feature => {
+            let isBlacklisted = false;
+            let matchCount = 0;
+            const props = feature.properties || {};
+
+            // Kontrola blacklist odpovědí ("Nechci = Ano")
+            for (const [indexStr, answer] of Object.entries(answers)) {
+                if (answer === true) {
+                    const mapped = QUESTION_CATEGORY_MAP[parseInt(indexStr, 10)];
+                    if (mapped && mapped.type === 'blacklist') {
+                        const score = props[mapped.category];
+                        const threshold = mapped.threshold !== undefined ? mapped.threshold : 0;
+                        if (typeof score === 'number' && score > threshold) {
+                            isBlacklisted = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (isBlacklisted) {
+                return {
+                    ...feature,
+                    properties: { ...props, matchPercent: 0 }
+                };
+            }
+
+            // Kontrola pozitivních shod ("Chci = Ano")
+            if (totalPositiveYes > 0) {
+                for (const [indexStr, _] of positiveQuestions) {
+                    const mapped = QUESTION_CATEGORY_MAP[parseInt(indexStr, 10)];
+                    if (mapped) {
+                        const score = props[mapped.category];
+                        const threshold = mapped.threshold !== undefined ? mapped.threshold : 0;
+                        if (typeof score === 'number' && score > threshold) {
+                            matchCount++;
+                        }
+                    }
+                }
+            }
+
+            const matchPercent = totalPositiveYes > 0 ? (matchCount / totalPositiveYes) * 100 : 0;
+
+            return {
+                ...feature,
+                properties: { ...props, matchPercent }
+            };
+        });
+
+        console.log("=== DOTAZNÍK: VYHODNOCENÍ DOKONČENO ===");
+        console.log("Vygenerováno dlaždic k zobrazení:", processedFeatures.length);
+
+        setQuestionnaireHeatmapData({
+            type: 'FeatureCollection',
+            features: processedFeatures
+        });
+
+        // Vypneme per-category heatmapy ať neruší
+        setActiveHeatmaps({});
     };
 
 
@@ -593,10 +742,6 @@ export default function AppPage() {
                     regionData={activeRegionPanel && globalData[activeRegionPanel] ? globalData[activeRegionPanel] : {}}
                     activeLayers={activeLayers}
                     toggleLayer={toggleLayer}
-                    onOpenSettings={() => {
-                        setActiveRegionPanel(null);
-                        setIsSettingsOpen(true);
-                    }}
                     onOpenDatasets={() => {
                         setActiveRegionPanel(null);
                         setIsDatasetsOpen(true);
@@ -670,6 +815,17 @@ export default function AppPage() {
                             />
                         )
                     ))}
+                    {questionnaireHeatmapData && (
+                        <MapFillLayer
+                            id="questionnaire-heatmap"
+                            data={questionnaireHeatmapData}
+                            colorProp="matchPercent"
+                            colorScale={HEATMAP_COLOR_SCALE}
+                            defaultColor="rgba(0,0,0,0)"
+                            opacity={layerOpacity}
+                            onClick={handleTileClick}
+                        />
+                    )}
                     {highlightedTilesData && (
                         <MapFillLayer
                             id="highlighted-nearest"
