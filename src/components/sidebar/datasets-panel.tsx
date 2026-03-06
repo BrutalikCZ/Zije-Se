@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Database, File, Folder, ChevronDown, ChevronRight, Settings2 } from 'lucide-react';
+import { Database, File, ChevronDown, Settings2, Globe, AlertCircle } from 'lucide-react';
 import { useLanguage } from '@/components/providers/language-provider';
 import { SidebarLayout } from './sidebar-layout';
+import { WFS_SERVICES, WfsService, wfsLayerKey } from '@/lib/wfs-services';
 
 interface FileNode {
     name: string;
@@ -53,7 +54,6 @@ function FileTreeNode({ node, level = 0, activeLayers, toggleLayer, insideTree =
                 <div className={`grid transition-all duration-300 ease-in-out ${expanded && node.children && node.children.length > 0 ? 'grid-rows-[1fr] opacity-100 mt-1 mb-2' : 'grid-rows-[0fr] opacity-0'}`}>
                     <div className="overflow-hidden">
                         <div className="relative flex flex-col ml-4 pl-4 pr-2 mt-1 gap-1">
-                            {/* Vertical tree line */}
                             <div className="absolute left-1 top-[-26px] bottom-[18px] w-px bg-white/10 dark:bg-black/10" />
                             {node.children?.map((child, i) => (
                                 <FileTreeNode key={i} node={child} level={level + 1} activeLayers={activeLayers} toggleLayer={toggleLayer} insideTree />
@@ -88,6 +88,122 @@ function FileTreeNode({ node, level = 0, activeLayers, toggleLayer, insideTree =
                 {node.name.replace(/_/g, ' ')}
             </span>
         </label>
+    );
+}
+
+function WfsServiceFolder({
+    service,
+    activeLayers,
+    toggleLayer,
+}: {
+    service: WfsService;
+    activeLayers: Record<string, boolean>;
+    toggleLayer: (layerPath: string, value: boolean) => void;
+}) {
+    const [expanded, setExpanded] = useState(false);
+    const [layers, setLayers] = useState<{ name: string; title: string }[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const fetched = React.useRef(false);
+
+    const handleExpand = async () => {
+        const next = !expanded;
+        setExpanded(next);
+        if (next && !fetched.current && !loading) {
+            fetched.current = true;
+            setLoading(true);
+            setError(null);
+            try {
+                const res = await fetch(`/api/wfs?url=${encodeURIComponent(service.url)}&request=GetCapabilities`);
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                setLayers(data.layers || []);
+            } catch (e: unknown) {
+                setError(e instanceof Error ? e.message : 'Nepodařilo se načíst vrstvy');
+                fetched.current = false; // allow retry
+            } finally {
+                setLoading(false);
+            }
+        }
+    };
+
+    const activeCount = layers.filter(l => activeLayers[wfsLayerKey(service.url, l.name)]).length;
+
+    return (
+        <div className="flex flex-col">
+            <button
+                onClick={handleExpand}
+                className={`group px-5 py-3 w-full text-sm font-medium rounded-full bg-[#1a1a1a] dark:bg-[#ececeb] text-white dark:text-black hover:bg-[#222222] dark:hover:bg-[#dcdcdc] border border-white/10 dark:border-black/10 flex items-center justify-between transition-all transform-gpu duration-300 ease-in-out cursor-pointer active:translate-y-px ${expanded ? 'mb-1' : ''}`}
+            >
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <Globe size={13} className="shrink-0 opacity-60" />
+                    <span className="flex-1 text-left truncate">{service.name}</span>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                    {layers.length > 0 && (
+                        <span className="text-[11px] tabular-nums opacity-50 font-mono bg-white/10 dark:bg-black/10 px-1.5 py-0.5 rounded-full">
+                            {activeCount}/{layers.length}
+                        </span>
+                    )}
+                    <ChevronDown
+                        size={14}
+                        className={`text-white/60 dark:text-black/60 transition-transform duration-300 ${expanded ? 'rotate-180' : ''}`}
+                    />
+                </div>
+            </button>
+
+            <div className={`grid transition-all duration-300 ease-in-out ${expanded ? 'grid-rows-[1fr] opacity-100 mt-1 mb-2' : 'grid-rows-[0fr] opacity-0'}`}>
+                <div className="overflow-hidden">
+                    <div className="relative flex flex-col ml-4 pl-4 pr-2 mt-1 gap-1">
+                        <div className="absolute left-1 top-[-26px] bottom-[18px] w-px bg-white/10 dark:bg-black/10" />
+
+                        {loading && (
+                            <div className="text-xs opacity-50 py-3 text-center">Načítám vrstvy…</div>
+                        )}
+
+                        {error && (
+                            <div className="flex items-center gap-2 text-xs text-red-400 py-2 px-2">
+                                <AlertCircle size={12} className="shrink-0" />
+                                <span className="truncate" title={error}>{error}</span>
+                            </div>
+                        )}
+
+                        {!loading && !error && layers.length === 0 && fetched.current && (
+                            <div className="text-xs opacity-50 py-3 text-center">Žádné vrstvy</div>
+                        )}
+
+                        {layers.map((layer) => {
+                            const key = wfsLayerKey(service.url, layer.name);
+                            const isActive = !!activeLayers[key];
+                            return (
+                                <label
+                                    key={layer.name}
+                                    className="relative flex items-center gap-3 cursor-pointer py-1.5 pl-3 pr-2 group rounded-xl hover:bg-white/5 dark:hover:bg-black/5 transition-colors border border-transparent hover:border-white/5 dark:hover:border-black/5"
+                                >
+                                    <div className="absolute left-[-12px] top-1/2 w-3 h-px bg-white/10 dark:bg-black/10" />
+                                    <div className="relative flex items-center shrink-0">
+                                        <input
+                                            type="checkbox"
+                                            className="sr-only"
+                                            checked={isActive}
+                                            onChange={(e) => toggleLayer(key, e.target.checked)}
+                                        />
+                                        <div className={`w-9 h-5 rounded-full transition-colors ${isActive ? 'bg-[#3388ff]' : 'bg-white/10 dark:bg-black/10 group-hover:bg-white/20 dark:group-hover:bg-black/20'}`} />
+                                        <div className={`absolute w-4 h-4 bg-white dark:bg-[#0b0b0b] rounded-full left-0.5 top-0.5 transition-transform shadow-sm ${isActive ? 'translate-x-[16px]' : ''}`} />
+                                    </div>
+                                    <span
+                                        className={`text-[13px] font-medium truncate opacity-70 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all w-full flex-1 ${isActive ? 'text-[#3388ff]' : ''}`}
+                                        title={`${layer.title} (${layer.name})`}
+                                    >
+                                        {layer.title}
+                                    </span>
+                                </label>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+        </div>
     );
 }
 
@@ -155,6 +271,7 @@ export function DatasetsPanel({
                 </div>
 
                 <div className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-2 relative z-10 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent pr-1 pb-4" data-lenis-prevent>
+                    {/* GeoJSON file tree */}
                     {loading ? (
                         <div className="text-xs opacity-50 py-4 text-center">
                             {language === 'cs' ? 'Načítám...' : 'Loading...'}
@@ -168,6 +285,29 @@ export function DatasetsPanel({
                             <FileTreeNode key={i} node={node} activeLayers={activeLayers} toggleLayer={toggleLayer} />
                         ))
                     )}
+
+                    {/* WFS Services section */}
+                    <div className="mt-4 mb-1">
+                        <div className="flex items-center gap-2 px-1 mb-3">
+                            <div className="h-px flex-1 bg-white/10 dark:bg-black/10" />
+                            <span className="text-[10px] font-bold uppercase tracking-widest opacity-40 shrink-0 flex items-center gap-1.5">
+                                <Globe size={10} />
+                                {language === 'cs' ? 'WFS Služby' : 'WFS Services'}
+                            </span>
+                            <div className="h-px flex-1 bg-white/10 dark:bg-black/10" />
+                        </div>
+
+                        <div className="flex flex-col gap-2">
+                            {WFS_SERVICES.map(service => (
+                                <WfsServiceFolder
+                                    key={service.id}
+                                    service={service}
+                                    activeLayers={activeLayers}
+                                    toggleLayer={toggleLayer}
+                                />
+                            ))}
+                        </div>
+                    </div>
                 </div>
             </div>
         </SidebarLayout>

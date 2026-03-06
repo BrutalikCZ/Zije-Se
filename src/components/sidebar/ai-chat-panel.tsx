@@ -56,8 +56,13 @@ function buildPOISummary(features: any[], label: string, refLat?: number, refLng
             distStr = ` (${formatDist(haversineKm(refLat, refLng, coords[0], coords[1]))})`;
         }
 
-        const addrParts = [props['addr:street'], props['addr:housenumber'], props['addr:city']].filter(Boolean);
-        const addr = addrParts.length ? ` — ${addrParts.join(' ')}` : '';
+        // Google Places returns a single `address` field; OSM uses addr:street etc.
+        const addr = props.address
+            ? ` — ${props.address}`
+            : (() => {
+                const parts = [props['addr:street'], props['addr:housenumber'], props['addr:city']].filter(Boolean);
+                return parts.length ? ` — ${parts.join(' ')}` : '';
+            })();
 
         lines.push(`• ${name}${distStr}${addr}`);
     }
@@ -232,6 +237,9 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
         const userMessage = input.trim();
         setInput('');
 
+        // Reset map layers on every new prompt
+        window.dispatchEvent(new CustomEvent('ai-map-reset'));
+
         const updatedMessages: Message[] = [...messages, { role: 'user', content: userMessage }];
         setMessages(updatedMessages);
         setIsLoading(true);
@@ -335,58 +343,119 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
             const finalData = await finalRes.json();
             console.log('[AI] pois:', JSON.stringify(finalData.pois), '| location:', JSON.stringify(finalData.location));
 
+            let mergedPois: any = null;
             let poisSummary: string | null = null;
+            const poisToFetch = Array.isArray(finalData.pois) ? finalData.pois : (finalData.pois ? [finalData.pois] : []);
 
-            // Fetch POIs and show on map
-            if (finalData.pois) {
+            // Gemini two-step: backend already fetched Places and returns pre-built GeoJSON
+            if (finalData.poiGeojson?.features?.length > 0) {
+                mergedPois = finalData.poiGeojson;
+                const firstFeat = mergedPois.features[0];
+                const firstLat = firstFeat?.geometry?.type === 'Point' ? firstFeat.geometry.coordinates[1] : undefined;
+                const firstLng = firstFeat?.geometry?.type === 'Point' ? firstFeat.geometry.coordinates[0] : undefined;
+                const firstLabel = firstFeat?.properties?._label || '';
+                advanceStep(language === 'cs' ? 'Zobrazuji místa na mapě...' : 'Showing places on map...');
+                window.dispatchEvent(new CustomEvent('ai-map-pois', {
+                    detail: { geojson: mergedPois, label: firstLabel },
+                }));
+                poisSummary = buildPOISummary(mergedPois.features, firstLabel || 'místa', firstLat, firstLng);
+            } else if (poisToFetch.length > 0) {
                 advanceStep(language === 'cs' ? 'Vyhledávám místa na mapě...' : 'Searching for places on map...');
-                try {
-                    const overpassRes = await fetch('/api/overpass', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(finalData.pois),
-                    });
-                    if (overpassRes.ok) {
-                        const geojson = await overpassRes.json();
-                        console.log('[AI] Overpass result:', geojson.features?.length, 'features');
-                        if (geojson.features?.length > 0) {
-                            window.dispatchEvent(new CustomEvent('ai-map-pois', {
-                                detail: { geojson, label: finalData.pois.label || '' },
-                            }));
-                            poisSummary = buildPOISummary(geojson.features, finalData.pois.label || 'místa', finalData.pois.lat, finalData.pois.lng);
+                const allFetchedFeatures: any[] = [];
+                let firstLat, firstLng, firstLabel;
+
+                // Non-Gemini models use Overpass (OSM); Gemini fallback uses /api/places
+                const poisEndpoint = aiModel === 'gemini' ? '/api/places' : '/api/overpass';
+
+                for (const poiReq of poisToFetch) {
+                    const poiLabel = poiReq.label || poiReq.keyword || poiReq.type || 'místa';
+                    advanceStep(language === 'cs' ? `Hledám: ${poiLabel}...` : `Searching: ${poiLabel}...`);
+                    try {
+                        const poiRes = await fetch(poisEndpoint, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(poiReq),
+                        });
+                        if (poiRes.ok) {
+                            const geojson = await poiRes.json();
+                            if (geojson.features?.length > 0) {
+                                allFetchedFeatures.push(...geojson.features);
+                                if (firstLat === undefined) {
+                                    firstLat = poiReq.lat;
+                                    firstLng = poiReq.lng;
+                                    firstLabel = poiReq.label;
+                                }
+                            }
                         }
-                    } else {
-                        console.warn('[AI] Overpass error:', overpassRes.status, await overpassRes.text().catch(() => ''));
+                    } catch (err) {
+                        console.error(`[AI] POI fetch (${poisEndpoint}) failed:`, err);
                     }
-                } catch (err) {
-                    console.error('[AI] Overpass fetch failed:', err);
+                }
+
+                if (allFetchedFeatures.length > 0) {
+                    mergedPois = { type: 'FeatureCollection', features: allFetchedFeatures };
+
+                    if (firstLat === undefined) {
+                        const firstFeat = allFetchedFeatures[0];
+                        if (firstFeat.geometry?.type === 'Point') {
+                            firstLat = firstFeat.geometry.coordinates[1];
+                            firstLng = firstFeat.geometry.coordinates[0];
+                        }
+                    }
+
+                    window.dispatchEvent(new CustomEvent('ai-map-pois', {
+                        detail: { geojson: mergedPois, label: firstLabel || '' },
+                    }));
+                    poisSummary = buildPOISummary(allFetchedFeatures, firstLabel || 'místa', firstLat, firstLng);
                 }
             }
 
             // Fetch location polygon and show on map
-            if (finalData.location) {
+            const locationsToFetch = Array.isArray(finalData.location) ? finalData.location : (finalData.location ? [finalData.location] : []);
+
+            if (locationsToFetch.length > 0) {
                 advanceStep(language === 'cs' ? 'Zobrazuji místo na mapě...' : 'Showing location on map...');
-                try {
-                    const nominatimRes = await fetch(
-                        `/api/nominatim?place=${encodeURIComponent(finalData.location.place)}`
-                    );
-                    if (nominatimRes.ok) {
-                        const geojson = await nominatimRes.json();
-                        console.log('[AI] Nominatim result:', geojson.features?.length, 'features');
-                        if (geojson.features?.length > 0) {
-                            window.dispatchEvent(new CustomEvent('ai-map-location', {
-                                detail: { geojson, label: finalData.location.label || '' },
-                            }));
+                const allLocationFeatures: any[] = [];
+                let firstLocLabel = '';
+
+                for (const locReq of locationsToFetch) {
+                    try {
+                        const nominatimRes = await fetch(
+                            `/api/nominatim?place=${encodeURIComponent(locReq.place)}`
+                        );
+                        if (nominatimRes.ok) {
+                            const geojson = await nominatimRes.json();
+                            if (geojson.features?.length > 0) {
+                                allLocationFeatures.push(...geojson.features);
+                                if (!firstLocLabel) firstLocLabel = locReq.label;
+                            }
                         }
-                    } else {
-                        console.warn('[AI] Nominatim error:', nominatimRes.status);
+                    } catch (err) {
+                        console.error('[AI] Nominatim fetch failed:', err);
                     }
-                } catch (err) {
-                    console.error('[AI] Nominatim fetch failed:', err);
+                }
+
+                if (allLocationFeatures.length > 0) {
+                    window.dispatchEvent(new CustomEvent('ai-map-location', {
+                        detail: { geojson: { type: 'FeatureCollection', features: allLocationFeatures }, label: firstLocLabel || '' },
+                    }));
                 }
             }
 
-            // Show AI reply and POI summary only after all processing is done
+            // Build trace line from searchMeta (Gemini) or from POI summary (other models)
+            let traceLine: string | null = null;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const searchMeta: { label: string; count: number; found: boolean }[] | null = finalData.searchMeta ?? null;
+            if (searchMeta && searchMeta.length > 0) {
+                const parts = searchMeta.map(m =>
+                    m.found ? `${m.label} → ${m.count} výsledků` : `${m.label} → nenalezeno`
+                );
+                traceLine = `🔍 ${parts.join(' | ')}`;
+            } else if (poisSummary && aiModel !== 'gemini') {
+                traceLine = poisSummary;
+            }
+
+            // Show AI reply; for Gemini the reply already incorporates place results (two-step backend)
             setMessages(prev => {
                 const next = [
                     ...prev,
@@ -395,7 +464,10 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
                         content: finalData.reply || (language === 'cs' ? 'Chyba: prázdná odpověď.' : 'Error: empty response.'),
                     },
                 ];
-                if (poisSummary) next.push({ role: 'assistant', content: poisSummary });
+                // Only show separate POI summary for non-Gemini models (Gemini integrates it in its reply)
+                if (poisSummary && aiModel !== 'gemini') next.push({ role: 'assistant', content: poisSummary });
+                // Append trace line as system message so user can see what was searched
+                if (traceLine && aiModel === 'gemini') next.push({ role: 'system', content: traceLine });
                 return next;
             });
         } catch (error) {

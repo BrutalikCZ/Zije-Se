@@ -19,6 +19,8 @@ interface SettingsPanelProps {
     setLayerOpacity: (v: number) => void;
     mapOpacity: number;
     setMapOpacity: (v: number) => void;
+    pointSize: number;
+    setPointSize: (v: number) => void;
     heatmapCategories: ReadonlyArray<{ key: string; labelCs: string; labelEn: string }>;
     activeHeatmaps: Record<string, boolean>;
     toggleHeatmap: (key: string, value: boolean) => void;
@@ -30,7 +32,8 @@ export function SettingsPanel({
     isOpen, onClose, isCollapsed, setIsCollapsed,
     mapType, setMapType, colorBlindMode, setColorBlindMode,
     showFills, setShowFills, layerOpacity, setLayerOpacity,
-    mapOpacity, setMapOpacity, heatmapCategories, activeHeatmaps, toggleHeatmap, resetSettings,
+    mapOpacity, setMapOpacity, pointSize, setPointSize,
+    heatmapCategories, activeHeatmaps, toggleHeatmap, resetSettings,
     onOpenDatasets
 }: SettingsPanelProps) {
     const { language } = useLanguage();
@@ -142,6 +145,15 @@ export function SettingsPanel({
                             <span>{Math.round(mapOpacity * 100)}%</span>
                         </div>
                         <input type="range" min="0" max="1" step="0.1" value={mapOpacity} onChange={(e) => setMapOpacity(parseFloat(e.target.value))} className="w-full h-1.5 bg-white/10 dark:bg-black/10 rounded-lg appearance-none cursor-pointer accent-[#3388ff]" />
+                    </div>
+
+                    {/* POINT SIZE */}
+                    <div className="flex flex-col gap-3 mt-1">
+                        <div className="flex justify-between text-sm font-semibold opacity-60 w-full">
+                            <span>{language === 'cs' ? 'Velikost bodů (vrstvy)' : 'Point Size (layers)'}</span>
+                            <span>{pointSize}px</span>
+                        </div>
+                        <input type="range" min="2" max="24" step="1" value={pointSize} onChange={(e) => setPointSize(parseInt(e.target.value))} className="w-full h-1.5 bg-white/10 dark:bg-black/10 rounded-lg appearance-none cursor-pointer accent-[#3388ff]" />
                     </div>
 
                     {/* RESET */}

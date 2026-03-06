@@ -42,17 +42,20 @@ export async function POST(request: NextRequest) {
 
         // Build list of OSM tag expressions
         const tagExprs: string[] = [];
-        if (amenity) tagExprs.push(`amenity="${amenity}"`);
-        if (shop) tagExprs.push(`shop="${shop}"`);
-        if (leisure) tagExprs.push(`leisure="${leisure}"`);
+        if (amenity) tagExprs.push(amenity.includes('=') ? amenity : `amenity="${amenity}"`);
+        if (shop) tagExprs.push(shop.includes('=') ? shop : `shop="${shop}"`);
+        if (leisure) tagExprs.push(leisure.includes('=') ? leisure : `leisure="${leisure}"`);
+
         if (tag) {
             const tags: string[] = Array.isArray(tag) ? tag : [tag];
             for (const t of tags) {
-                const eqIdx = t.indexOf('=');
-                if (eqIdx > 0) {
+                if (t.includes('=')) {
+                    const eqIdx = t.indexOf('=');
                     const k = t.slice(0, eqIdx).trim();
                     const v = t.slice(eqIdx + 1).trim().replace(/^"|"$/g, '');
                     if (k && v) tagExprs.push(`${k}="${v}"`);
+                } else if (t.trim()) {
+                    tagExprs.push(t.trim());
                 }
             }
         }
@@ -63,13 +66,15 @@ export async function POST(request: NextRequest) {
 
         let lat: number | null = bodyLat ?? null;
         let lng: number | null = bodyLng ?? null;
-        // User-provided radius clamped to 10–5000m; default 1000m
         let queryRadius = radius != null ? Math.max(10, Math.min(5000, Number(radius))) : 1000;
 
-        // Resolve placeName to coordinates via Nominatim (much faster than Overpass area queries)
         if (placeName && (lat == null || lng == null)) {
+            const normalizedPlace = placeName.toLowerCase().includes('česká republika')
+                ? placeName
+                : `${placeName}, Česká republika`;
+
             const nominatimUrl = new URL('https://nominatim.openstreetmap.org/search');
-            nominatimUrl.searchParams.set('q', `${placeName}, Česká republika`);
+            nominatimUrl.searchParams.set('q', normalizedPlace);
             nominatimUrl.searchParams.set('format', 'json');
             nominatimUrl.searchParams.set('limit', '1');
             nominatimUrl.searchParams.set('countrycodes', 'cz');

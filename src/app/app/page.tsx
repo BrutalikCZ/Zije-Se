@@ -88,6 +88,7 @@ export default function AppPage() {
     const [showFills, setShowFills] = useState(true);
     const [layerOpacity, setLayerOpacity] = useState(0.8);
     const [mapOpacity, setMapOpacity] = useState(1.0);
+    const [pointSize, setPointSize] = useState(8);
 
     const [globalData, setGlobalData] = useState<Record<string, Record<string, string[]>>>({});
     const [activeLayers, setActiveLayers] = useState<Record<string, boolean>>({});
@@ -108,6 +109,7 @@ export default function AppPage() {
                 if (user.mapSettings.showFills !== undefined) setShowFills(user.mapSettings.showFills);
                 if (user.mapSettings.layerOpacity !== undefined) setLayerOpacity(user.mapSettings.layerOpacity);
                 if (user.mapSettings.mapOpacity !== undefined) setMapOpacity(user.mapSettings.mapOpacity);
+                if (user.mapSettings.pointSize !== undefined) setPointSize(user.mapSettings.pointSize);
             }
             if (user.aiSettings) {
                 if (user.aiSettings.aiModel !== undefined) setAiModel(user.aiSettings.aiModel);
@@ -123,7 +125,7 @@ export default function AppPage() {
         if (saveTimer.current) clearTimeout(saveTimer.current);
 
         saveTimer.current = setTimeout(async () => {
-            const mapSettings = { mapType, colorBlindMode, showFills, layerOpacity, mapOpacity };
+            const mapSettings = { mapType, colorBlindMode, showFills, layerOpacity, mapOpacity, pointSize };
             const aiSettings = { aiModel };
 
             const mapChanged = JSON.stringify(mapSettings) !== JSON.stringify(user.mapSettings || {});
@@ -156,7 +158,7 @@ export default function AppPage() {
         return () => {
             if (saveTimer.current) clearTimeout(saveTimer.current);
         };
-    }, [mapType, colorBlindMode, showFills, layerOpacity, mapOpacity, aiModel, user, updateUser]);
+    }, [mapType, colorBlindMode, showFills, layerOpacity, mapOpacity, pointSize, aiModel, user, updateUser]);
 
     // Per-category heatmap toggles
     const HEATMAP_CATEGORIES = [
@@ -254,11 +256,17 @@ export default function AppPage() {
             const detail = (e as CustomEvent).detail;
             if (detail?.geojson) setAiLocationData(detail.geojson);
         };
+        const handleReset = () => {
+            setAiPoiData(null);
+            setAiLocationData(null);
+        };
         window.addEventListener('ai-map-pois', handlePois);
         window.addEventListener('ai-map-location', handleLocation);
+        window.addEventListener('ai-map-reset', handleReset);
         return () => {
             window.removeEventListener('ai-map-pois', handlePois);
             window.removeEventListener('ai-map-location', handleLocation);
+            window.removeEventListener('ai-map-reset', handleReset);
         };
     }, []);
 
@@ -331,6 +339,7 @@ export default function AppPage() {
         setShowFills(true);
         setLayerOpacity(0.8);
         setMapOpacity(1.0);
+        setPointSize(8);
         setActiveHeatmaps({});
     };
 
@@ -784,6 +793,8 @@ export default function AppPage() {
                     setLayerOpacity={setLayerOpacity}
                     mapOpacity={mapOpacity}
                     setMapOpacity={setMapOpacity}
+                    pointSize={pointSize}
+                    setPointSize={setPointSize}
                     heatmapCategories={HEATMAP_CATEGORIES}
                     activeHeatmaps={activeHeatmaps}
                     toggleHeatmap={toggleHeatmap}
@@ -821,6 +832,7 @@ export default function AppPage() {
                         colorBlindMode={colorBlindMode}
                         layerOpacity={layerOpacity}
                         showFills={showFills}
+                        pointSize={pointSize}
                     />
                     {heatmapData && HEATMAP_CATEGORIES.map(cat => (
                         activeHeatmaps[cat.key] && (
@@ -859,6 +871,13 @@ export default function AppPage() {
                             id="ai-pois"
                             data={aiPoiData}
                             autoFlyTo={true}
+                            onClick={(f) => {
+                                setClickedFeatures([{
+                                    layer: { id: 'Nalezená místa' },
+                                    object: f
+                                }]);
+                                setIsFeatureInfoOpen(true);
+                            }}
                         />
                     )}
                 </Map>

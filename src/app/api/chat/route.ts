@@ -270,38 +270,48 @@ Přidej tento blok VŽDY, když ve své odpovědi zmiňuješ, doporučuješ nebo
 }
 \`\`\`
 
-## 2. json:pois — VYHLEDÁVÁNÍ BODŮ ZÁJMU (Školy, obchody, úřady atd.)
-Pokud uživatel hledá místa určitého typu, VŽDY přidej tento blok. Použij souřadnice (lat, lng) z kontextu uživatele nebo hledání zruš přes "placeName".
+## 2. json:pois — VYHLEDÁVÁNÍ BODŮ ZÁJMU pomocí Google Places API
+Pokud uživatel hledá místa určitého typu, VŽDY přidej tento blok. Používáš **Google Places typy** (ne OSM tagy).
 
-**PRAVIDLA PRO RADIUS:**
-- Výchozí: 1000 m (použij, pokud uživatel neřekne jinak).
-- Maximální: 5000 m (i když uživatel řekne "v okruhu 10 km", použij 5000).
-- Pokud hledáš v pojmenovaném městě (pomocí \`placeName\`), pole \`radius\` ZCELA VYNECH (vypočítá se automaticky).
+### Povinná pole (jedno nebo obě):
+- Pole "type" — Google Places typ (viz seznam níže). Použij pro přesné vyhledání kategorie.
+- Pole "keyword" — textový dotaz pro vyhledání (použij pro školy s konkrétním typem, nebo kombinaci více pojmů).
 
-**KATEGORIE A FILTRY ŠKOL (DŮLEŽITÉ):**
-Zde musíš VŽDY kombinovat \`amenity\` a \`nameFilter\` přesně takto:
-- Základní škola: \`"amenity": "school", "nameFilter": "ZŠ|Základní škola|základní škola"\`
-- Střední škola: \`"amenity": "school", "nameFilter": "SŠ|SPŠ|SOŠ|SOU|Gymnázium|gymnázium|Střední škola|Obchodní akademie"\`
-- ZUŠ: \`"amenity": "school", "nameFilter": "ZUŠ|Základní umělecká"\`
-- Vysoká škola: \`"amenity": "university"\` (bez nameFilter)
-- Mateřská škola: \`"amenity": "kindergarten"\` (bez nameFilter)
+### Poloha — PRIORITA (dodržuj přesně v tomto pořadí):
+1. **Souřadnice v kontextu** — pokud je v systémové zprávě "Aktuální označené souřadnice" nebo "zeměpisná šířka X, zeměpisná délka Y", použij tyto hodnoty jako pole "lat" + "lng". Toto má NEJVYŠŠÍ PRIORITU.
+2. **Název města/obce v aktuální zprávě uživatele** — pokud uživatel píše "v Pardubicích", "u Brna", "v Praze 6" apod., použij pole "placeName" s tímto názvem + ", Česká republika".
+3. **Souřadnice z historické systémové zprávy** — pokud nejsou nové souřadnice, použij nejposlednější lat/lng ze souboru konverzace.
+4. **Název místa z kontextu konverzace** — použij pole "placeName" s nejposlednějším zmiňovaným místem.
 
-**ZÁKLADNÍ ZKRATKY (amenity / shop / leisure):**
-- amenity: pharmacy, hospital, doctors, dentist, bank, post_office, police, restaurant, cafe, parking, veterinary...
-- shop: supermarket, convenience, bakery, clothes, hardware, furniture...
-- leisure: park, playground, sports_centre, swimming_pool, fitness_centre...
+- Pokud použiješ "placeName", pole "radius" ZCELA VYNECH (vypočítá se automaticky).
+- **NIKDY nevymýšlej souřadnice.** Použij vždy reálné hodnoty z kontextu.
 
-**GENERICKÉ TAGY (pokud nenajdeš zkratku, použij "tag"):**
-- Úřady: \`"tag": ["amenity=townhall", "office=government"]\`
-- Pošta: \`"tag": "amenity=post_office"\`
-- Nemocnice: \`"tag": "amenity=hospital"\`
+### Radius:
+- Výchozí: 1000 m. Maximum: 5000 m (ani při dotazu "v okruhu 10 km" nepřekračuj 5000).
+
+### SEZNAM GOOGLE PLACES TYPŮ:
+**Zdravotnictví:** pharmacy, hospital, doctor, dentist
+**Vzdělávání:** primary_school, secondary_school, preschool, university
+**Jídlo a pití:** restaurant, cafe, bar, bakery, fast_food_restaurant
+**Obchody:** supermarket, convenience_store, clothing_store, hardware_store, furniture_store, book_store, bicycle_store, pet_store, florist
+**Volný čas:** park, playground, sports_complex, swimming_pool, fitness_center, stadium, museum, movie_theater, library
+**Služby:** bank, atm, post_office, police, fire_station, parking, veterinary_care, gas_station, electric_vehicle_charging_station, car_repair
+**Ubytování:** hotel, guest_house
+**Úřady:** city_hall, courthouse
+
+### PRAVIDLA PRO ŠKOLY (DŮLEŽITÉ):
+- Základní škola (ZŠ): type="primary_school", keyword="základní škola ZŠ"
+- Střední škola / Gymnázium: type="secondary_school", keyword="střední škola gymnázium"
+- Základní umělecká škola: keyword="základní umělecká škola ZUŠ" (bez type)
+- Mateřská školka: keyword="mateřská škola MŠ školka" (bez type — Google Places nemá spolehlivý typ pro MŠ v ČR)
+- Vysoká škola / Univerzita: type="university" (bez keyword)
 
 **PŘÍKLADY SPRÁVNÉHO POUŽITÍ:**
 
-*Příklad 1: Lékárna v okolí uživatele (výchozí radius)*
+*Příklad 1: Lékárna v okolí uživatele*
 \`\`\`json:pois
 {
-  "amenity": "pharmacy",
+  "type": "pharmacy",
   "lat": 50.0477,
   "lng": 15.7583,
   "radius": 1000,
@@ -309,11 +319,11 @@ Zde musíš VŽDY kombinovat \`amenity\` a \`nameFilter\` přesně takto:
 }
 \`\`\`
 
-*Příklad 2: Základní školy v okruhu 3 km (vlastní radius + nameFilter)*
+*Příklad 2: Základní školy v okruhu 3 km*
 \`\`\`json:pois
 {
-  "amenity": "school",
-  "nameFilter": "ZŠ|Základní škola|základní škola",
+  "type": "primary_school",
+  "keyword": "základní škola ZŠ",
   "lat": 50.0477,
   "lng": 15.7583,
   "radius": 3000,
@@ -321,12 +331,23 @@ Zde musíš VŽDY kombinovat \`amenity\` a \`nameFilter\` přesně takto:
 }
 \`\`\`
 
-*Příklad 3: Hledání v konkrétním městě (BEZ radiusu)*
+*Příklad 3: Restaurace v konkrétním městě (BEZ radiusu)*
 \`\`\`json:pois
 {
-  "tag":["shop=wholesale", "shop=cash_and_carry"],
+  "type": "restaurant",
   "placeName": "Pardubice, Česká republika",
-  "label": "Velkoobchody v Pardubicích"
+  "label": "Restaurace v Pardubicích"
+}
+\`\`\`
+
+*Příklad 4: Obecní úřad v okolí*
+\`\`\`json:pois
+{
+  "type": "city_hall",
+  "lat": 50.0477,
+  "lng": 15.7583,
+  "radius": 5000,
+  "label": "Obecní úřady v okolí"
 }
 \`\`\`
 
@@ -436,6 +457,129 @@ async function call_gemini(messages: ChatMessage[]) {
 }
 
 
+// === GOOGLE PLACES HELPERS (two-step Gemini flow) ===
+
+async function nominatimResolve(placeName: string): Promise<{ lat: number; lng: number; radius: number } | null> {
+    const normalized = placeName.toLowerCase().includes('česká republika')
+        ? placeName : `${placeName}, Česká republika`;
+    const url = new URL('https://nominatim.openstreetmap.org/search');
+    url.searchParams.set('q', normalized);
+    url.searchParams.set('format', 'json');
+    url.searchParams.set('limit', '1');
+    url.searchParams.set('countrycodes', 'cz');
+    try {
+        const res = await fetch(url.toString(), { headers: { 'User-Agent': 'ZijeSe/1.0 (contact@zijese.cz)' } });
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (!data.length) return null;
+        const p = data[0];
+        const lat = parseFloat(p.lat), lng = parseFloat(p.lon);
+        const bb: string[] = p.boundingbox;
+        let radius = 5000;
+        if (bb?.length === 4) {
+            const latSpan = Math.abs(parseFloat(bb[1]) - parseFloat(bb[0]));
+            const lngSpan = Math.abs(parseFloat(bb[3]) - parseFloat(bb[2]));
+            radius = Math.max(2000, Math.min(50000, Math.round(Math.max(latSpan, lngSpan) * 111000 / 2)));
+        }
+        return { lat, lng, radius };
+    } catch { return null; }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function fetchPlacesForPoi(apiKey: string, poiReq: any): Promise<any[]> {
+    const PLACES_BASE = 'https://places.googleapis.com/v1/places';
+    const FIELD_MASK = 'places.id,places.displayName,places.location,places.formattedAddress,places.nationalPhoneNumber,places.websiteUri';
+
+    let lat: number | null = poiReq.lat ?? null;
+    let lng: number | null = poiReq.lng ?? null;
+    let radius = poiReq.radius != null ? Math.max(100, Math.min(50000, Number(poiReq.radius))) : 1000;
+
+    if (poiReq.placeName && (lat == null || lng == null)) {
+        const resolved = await nominatimResolve(poiReq.placeName);
+        if (resolved) { lat = resolved.lat; lng = resolved.lng; radius = resolved.radius; }
+    }
+    if (lat == null || lng == null) return [];
+
+    try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let placesData: any;
+        if (poiReq.keyword) {
+            // Text Search uses rectangle for locationRestriction (circle is only for Nearby Search)
+            const latDelta = radius / 111000;
+            const lngDelta = radius / (111000 * Math.cos(lat * Math.PI / 180));
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const body: any = {
+                textQuery: poiReq.keyword,
+                maxResultCount: 20,
+                locationRestriction: {
+                    rectangle: {
+                        low: { latitude: lat - latDelta, longitude: lng - lngDelta },
+                        high: { latitude: lat + latDelta, longitude: lng + lngDelta },
+                    },
+                },
+                regionCode: 'CZ',
+                languageCode: 'cs',
+            };
+            if (poiReq.type && !Array.isArray(poiReq.type)) body.includedType = poiReq.type;
+            const res = await fetch(`${PLACES_BASE}:searchText`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': apiKey, 'X-Goog-FieldMask': FIELD_MASK },
+                body: JSON.stringify(body),
+            });
+            if (!res.ok) return [];
+            placesData = await res.json();
+        } else if (poiReq.type) {
+            const types = Array.isArray(poiReq.type) ? poiReq.type : [poiReq.type];
+            const res = await fetch(`${PLACES_BASE}:searchNearby`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': apiKey, 'X-Goog-FieldMask': FIELD_MASK },
+                body: JSON.stringify({
+                    includedTypes: types,
+                    maxResultCount: 20,
+                    locationRestriction: { circle: { center: { latitude: lat, longitude: lng }, radius } },
+                    languageCode: 'cs',
+                }),
+            });
+            if (!res.ok) return [];
+            placesData = await res.json();
+        } else {
+            return [];
+        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return (placesData.places || []).map((p: any) => ({
+            name: p.displayName?.text || '',
+            address: p.formattedAddress || '',
+            phone: p.nationalPhoneNumber || '',
+            website: p.websiteUri || '',
+            lat: p.location?.latitude,
+            lng: p.location?.longitude,
+        }));
+    } catch { return []; }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function buildPlacesContextForAI(results: { label: string; places: any[]; found: boolean }[]): string {
+    const lines: string[] = ['Výsledky vyhledávání míst z Google Places API:'];
+    for (const group of results) {
+        if (!group.found) {
+            lines.push(`\n### ${group.label} — NENALEZENO (0 míst v zadaném okruhu)`);
+            continue;
+        }
+        lines.push(`\n### ${group.label} (nalezeno: ${group.places.length} míst)`);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        for (const p of group.places.slice(0, 15)) {
+            const parts: string[] = [`• ${p.name || 'Bez názvu'}`];
+            if (p.address) parts.push(`— ${p.address}`);
+            if (p.phone) parts.push(`| tel: ${p.phone}`);
+            if (p.website) parts.push(`| web: ${p.website}`);
+            lines.push(parts.join(' '));
+        }
+        if (group.places.length > 15) lines.push(`  ... a dalších ${group.places.length - 15} míst.`);
+    }
+    return lines.join('\n');
+}
+
+
 export async function POST(request: NextRequest) {
     try {
         const data: ChatRequest = await request.json();
@@ -468,15 +612,91 @@ export async function POST(request: NextRequest) {
         console.log(`[AI] Last user msg: ${messages.filter(m => m.role === 'user').pop()?.content?.slice(0, 200) || 'N/A'}`);
         console.log("------------------------------------------------------------");
 
-        let replyContent;
+        let replyContent: string;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let step1Pois: any[] | null = null; // POIs from step 1, used for map display (non-Gemini fallback)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let searchMeta: { label: string; count: number; found: boolean }[] | null = null;
+        // Pre-built GeoJSON returned directly for Gemini (avoids double-fetch on frontend)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let poiGeojson: any | null = null;
+
         if (model === 'gemini') {
-            replyContent = await call_gemini(messages);
+            // ── Step 1: ask Gemini what to search ────────────────────────
+            const step1Reply = await call_gemini(messages);
+            console.log(`[AI] Step 1 reply: ${step1Reply.length} chars`);
+
+            const s1PoisMatches = Array.from(step1Reply.matchAll(/```json:pois\s*([\s\S]*?)```/g)) as any[];
+            step1Pois = s1PoisMatches
+                .map(m => { try { return JSON.parse(m[1].trim()); } catch { return null; } })
+                .filter(Boolean);
+
+            const placesApiKey = process.env.GOOGLE_PLACES_API_KEY;
+
+            if (step1Pois.length > 0 && placesApiKey) {
+                // ── Step 2: fetch from Google Places ─────────────────────
+                const placesResults: { label: string; places: any[]; found: boolean }[] = [];
+                for (const poiReq of step1Pois) {
+                    console.log(`[AI] Fetching places: "${poiReq.label || poiReq.type || poiReq.keyword}"`);
+                    const places = await fetchPlacesForPoi(placesApiKey, poiReq);
+                    console.log(`[AI]   → ${places.length} results`);
+                    placesResults.push({ label: poiReq.label || poiReq.keyword || poiReq.type || 'Místa', places, found: places.length > 0 });
+                }
+
+                // Build searchMeta for frontend trace display
+                searchMeta = placesResults.map(r => ({ label: r.label, count: r.places.length, found: r.found }));
+
+                // Build GeoJSON from Places results directly — frontend uses this, no re-fetch needed
+                const anyFound = placesResults.some(r => r.found);
+                if (anyFound) {
+                    const features: any[] = [];
+                    for (const result of placesResults) {
+                        for (const p of result.places) {
+                            if (p.lat != null && p.lng != null) {
+                                features.push({
+                                    type: 'Feature',
+                                    geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
+                                    properties: { name: p.name, address: p.address, phone: p.phone, website: p.website, _label: result.label },
+                                });
+                            }
+                        }
+                    }
+                    if (features.length > 0) poiGeojson = { type: 'FeatureCollection', features };
+                }
+
+                // ── Step 3: always call Gemini with places context ────────
+                const placesContext = buildPlacesContextForAI(placesResults);
+                const poisInstruction = anyFound
+                    ? `NEPŘIDÁVEJ json:pois bloky — tato data jsou již zpracována a zobrazena na mapě.`
+                    : `Protože nebyla nalezena žádná místa v zadané oblasti, MUSÍŠ přidat json:pois blok pro alternativní místo, které doporučuješ (např. nejbližší velké město). Použij pole "placeName" s názvem alternativního města.`;
+                const step2Messages: ChatMessage[] = [
+                    ...messages,
+                    {
+                        role: 'system',
+                        content:
+                            `${placesContext}\n\n` +
+                            `Na základě těchto výsledků vyhledávání napiš finální, kompletní odpověď uživateli. ` +
+                            `Pokud byla nějaká místa nalezena, zmiň jejich konkrétní názvy, adresy a případné kontakty. ` +
+                            `Pokud nebylo nalezeno nic, informuj uživatele a navrhni alternativy (větší okruh, jiné hledání apod.). ` +
+                            `${poisInstruction} ` +
+                            `MUSÍŠ přidat json:location blok pro každé konkrétní město nebo oblast, o které mluvíš v odpovědi.`,
+                    },
+                ];
+                console.log(`[AI] Step 2 call — found: ${anyFound}, groups: ${placesResults.length}`);
+                replyContent = await call_gemini(step2Messages);
+
+                // If nothing found, allow step 3 json:pois (alternative suggestion) to be picked up below
+                if (!anyFound) step1Pois = [];
+            } else {
+                // No POIs requested or no API key — use step 1 reply
+                replyContent = step1Reply;
+            }
         } else {
             const actualOllamaModel = model === 'gemma' ? DEFAULT_MODEL : model;
             replyContent = await call_ollama(messages, actualOllamaModel);
         }
 
-        console.log(`[AI] Response: ${replyContent.length} chars`);
+        console.log(`[AI] Final reply: ${replyContent.length} chars`);
 
         let filters = null;
         const filterMatch = replyContent.match(/```json:filters\s*([\s\S]*?)```/);
@@ -489,24 +709,23 @@ export async function POST(request: NextRequest) {
         }
 
         let pois = null;
-        const poisMatch = replyContent.match(/```json:pois\s*([\s\S]*?)```/);
-        if (poisMatch) {
-            try {
-                pois = JSON.parse(poisMatch[1].trim());
-            } catch {
-                console.warn('[AI] Failed to parse pois JSON from response.');
-            }
+        if (step1Pois && step1Pois.length > 0) {
+            // Gemini two-step: POIs come from step 1 (step 2 reply intentionally has none)
+            pois = step1Pois;
+        } else {
+            const poisMatches = Array.from(replyContent.matchAll(/```json:pois\s*([\s\S]*?)```/g)) as any[];
+            const allPois = poisMatches.map(m => {
+                try { return JSON.parse(m[1].trim()); } catch { return null; }
+            }).filter(Boolean);
+            if (allPois.length > 0) pois = allPois;
         }
 
         let location = null;
-        const locationMatch = replyContent.match(/```json:location\s*([\s\S]*?)```/);
-        if (locationMatch) {
-            try {
-                location = JSON.parse(locationMatch[1].trim());
-            } catch {
-                console.warn('[AI] Failed to parse location JSON from response.');
-            }
-        }
+        const locationMatches = Array.from(replyContent.matchAll(/```json:location\s*([\s\S]*?)```/g)) as any[];
+        const allLocations = locationMatches.map(m => {
+            try { return JSON.parse(m[1].trim()); } catch { return null; }
+        }).filter(Boolean);
+        if (allLocations.length > 0) location = allLocations;
 
         const cleanReply = replyContent
             .replace(/```json:filters\s*[\s\S]*?```/g, '')
@@ -518,7 +737,9 @@ export async function POST(request: NextRequest) {
             reply: cleanReply,
             filters,
             pois,
+            poiGeojson,
             location,
+            searchMeta,
             model,
             messageCount: messages.length,
         });

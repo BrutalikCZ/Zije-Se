@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useMemo } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMap } from "@/components/map/map";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import { GeoJsonLayer } from "@deck.gl/layers";
@@ -10,6 +10,7 @@ export interface LegacyLayersProps {
     colorBlindMode?: boolean;
     showFills?: boolean;
     layerOpacity?: number;
+    pointSize?: number;
 }
 
 // Generate deterministic colors
@@ -22,7 +23,6 @@ const hashCode = (str: string) => {
 const colorFromStr = (str: string, cbMode: boolean): [number, number, number] => {
     const h = Math.abs(hashCode(str));
     if (cbMode) {
-        // Colorblind safe palette (Okabe-Ito inspired)
         const palette = [
             [230, 159, 0], [86, 180, 233], [0, 158, 115],
             [240, 228, 66], [0, 114, 178], [213, 94, 0], [204, 121, 167]
@@ -37,10 +37,21 @@ export function LegacyLayers({
     activeLayers,
     colorBlindMode = false,
     showFills = true,
-    layerOpacity = 0.8
+    layerOpacity = 0.8,
+    pointSize = 8,
 }: LegacyLayersProps) {
     const { map, isLoaded } = useMap();
     const overlayRef = useRef<MapboxOverlay | null>(null);
+    const [zoom, setZoom] = useState(6.5);
+
+    // Track zoom level
+    useEffect(() => {
+        if (!map || !isLoaded) return;
+        const onZoom = () => setZoom(map.getZoom());
+        map.on('zoom', onZoom);
+        setZoom(map.getZoom());
+        return () => { map.off('zoom', onZoom); };
+    }, [map, isLoaded]);
 
     // Initialize MapboxOverlay once when map is loaded
     useEffect(() => {
@@ -48,7 +59,7 @@ export function LegacyLayers({
 
         if (!overlayRef.current) {
             const overlay = new MapboxOverlay({
-                interleaved: false, // Prevents Z-fighting and opacity bleed
+                interleaved: false,
                 layers: []
             });
             map.addControl(overlay as any);
@@ -67,15 +78,38 @@ export function LegacyLayers({
     useEffect(() => {
         if (!overlayRef.current || !isLoaded || !map) return;
 
+        // Bigger when zoomed out, smaller when zoomed in
+        const factor = Math.max(0.2, 1 + (10 - zoom) * 0.1);
+        const radius = Math.round(pointSize * factor);
+
         const deckLayers = Object.entries(activeLayers)
             .filter(([_, isVisible]) => isVisible)
             .map(([filename]) => {
                 const color = colorFromStr(filename, colorBlindMode);
                 const safeOpac = Math.max(0, Math.min(1, layerOpacity));
 
+                // WFS layer: key format is wfs::{encodedServiceUrl}::{typeName}
+                let dataUrl: string;
+                let layerId: string;
+                if (filename.startsWith('wfs::')) {
+                    const withoutPrefix = filename.slice(5);
+                    const sep = withoutPrefix.indexOf('::');
+                    if (sep !== -1) {
+                        const serviceUrl = decodeURIComponent(withoutPrefix.slice(0, sep));
+                        const typeName = withoutPrefix.slice(sep + 2);
+                        dataUrl = `/api/wfs?url=${encodeURIComponent(serviceUrl)}&request=GetFeature&typeName=${encodeURIComponent(typeName)}`;
+                    } else {
+                        return null;
+                    }
+                    layerId = `wfs-${filename}`;
+                } else {
+                    dataUrl = `/data/${filename.split('?')[0]}`;
+                    layerId = `geojson-${filename}`;
+                }
+
                 return new GeoJsonLayer({
-                    id: `geojson-${filename}`,
-                    data: `/data/${filename.split('?')[0]}`,
+                    id: layerId,
+                    data: dataUrl,
 
                     // Style config
                     filled: showFills,
@@ -83,11 +117,12 @@ export function LegacyLayers({
                     stroked: true,
                     extruded: false,
 
-                    // Points styling
+                    // Points styling — zoom-responsive pixel radius
                     pointType: 'circle',
-                    pointRadiusScale: 5,
-                    getPointRadius: 20,
-                    pointRadiusMinPixels: 6,
+                    pointRadiusUnits: 'pixels',
+                    getPointRadius: radius,
+                    pointRadiusMinPixels: 4,
+                    pointRadiusMaxPixels: 5,
 
                     // Polygons & Lines styling
                     getFillColor: [...color, showFills ? 180 : 0],
@@ -120,10 +155,9 @@ export function LegacyLayers({
                 });
             });
 
-        // Push new layers configuration to the existing overlay
-        overlayRef.current.setProps({ layers: deckLayers });
+        overlayRef.current.setProps({ layers: deckLayers.filter(Boolean) });
 
-    }, [map, isLoaded, activeLayers, colorBlindMode, showFills, layerOpacity]);
+    }, [map, isLoaded, activeLayers, colorBlindMode, showFills, layerOpacity, zoom, pointSize]);
 
     return null;
 }
