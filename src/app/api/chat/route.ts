@@ -26,7 +26,6 @@ interface ExtractionResult {
     keywords: string[];
     selectedFiles: string[];
     isConversational: boolean;
-    webSearchQueries: string[];
 }
 
 interface SearchResult {
@@ -150,90 +149,25 @@ function buildGeoSearchContext(searchResults: SearchResult[]): string {
     return `Výsledky vyhledávání v GeoJSON databázi:\n\n${parts.join('\n\n')}`;
 }
 
-interface WebSearchResult {
-    query: string;
-    snippets: { url: string; domain: string; title: string; text: string }[];
-}
-
-async function performWebSearch(queries: string[]): Promise<WebSearchResult[]> {
-    if (queries.length === 0) return [];
-
-    console.log(`[AI WebSearch] Searching: ${queries.join(', ')}`);
-
-    try {
-        const baseUrl = process.env.NEXTAUTH_URL || process.env.VERCEL_URL || 'http://localhost:3000';
-        const response = await fetch(`${baseUrl}/api/web-search`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                queries,
-                maxResultsPerQuery: 3,
-                maxContentLength: 2000,
-            }),
-        });
-
-        if (!response.ok) {
-            console.warn(`[AI WebSearch] API returned ${response.status}`);
-            return [];
-        }
-
-        const data = await response.json();
-        const results: WebSearchResult[] = data.results || [];
-
-        for (const r of results) {
-            console.log(`[AI WebSearch]   "${r.query}": ${r.snippets.length} pages scraped`);
-        }
-
-        return results;
-    } catch (err: any) {
-        console.warn('[AI WebSearch] Error:', err.message);
-        return [];
-    }
-}
-
-function buildWebSearchContext(results: WebSearchResult[]): string {
-    if (results.length === 0) return '';
-
-    const parts = results.map(r => {
-        if (r.snippets.length === 0) {
-            return `### Hledáno: "${r.query}" — žádné výsledky`;
-        }
-
-        const snippetTexts = r.snippets.map(s =>
-            `**${s.title || s.domain}** (${s.domain}):\n${s.text.slice(0, 1500)}`
-        );
-
-        return `### Hledáno: "${r.query}" (${r.snippets.length} zdrojů)\n${snippetTexts.join('\n\n')}`;
-    });
-
-    return `Výsledky vyhledávání na internetu:\n\n${parts.join('\n\n---\n\n')}`;
-}
-
 const EXTRACTION_SYSTEM_PROMPT = `Jsi extraktor klíčových slov. Uživatel hledá bydlení v České republice.
 
 Tvůj úkol:
 1. Extrahuj klíčová slova z dotazu uživatele (typ nemovitosti, požadavky, lokalita, apod.)
 2. Podívej se na seznam dostupných GeoJSON souborů a vyber 0–5 souborů, které mohou být relevantní. Vybírej podle názvu souboru a cesty.
 3. Urči, zda je dotaz konverzační (pozdrav, otázka na funkce) nebo analytický (hledá konkrétní data).
-4. Pokud uživatel potřebuje aktuální informace z internetu (ceny nemovitostí, konkrétní školy, úřady, novinky, dopravní spojení apod.), navrhni 1–3 vyhledávací dotazy pro web.
 
 Odpověz POUZE validním JSON objektem, nic jiného:
 {
   "keywords": ["klíčové", "slovo", "další"],
   "selectedFiles": ["cesta/soubor1.geojson", "cesta/soubor2.geojson"],
-  "isConversational": false,
-  "webSearchQueries": ["ceny bytů Praha 2025", "školy Pardubice hodnocení"]
+  "isConversational": false
 }
-
-Pokud web search není potřeba (máš dost informací z GeoJSON nebo jde o obecný dotaz), dej prázdné pole:
-  "webSearchQueries": []
 
 Pokud je dotaz konverzační (pozdrav, díky, jak to funguje apod.), vrať:
 {
   "keywords": [],
   "selectedFiles": [],
-  "isConversational": true,
-  "webSearchQueries": []
+  "isConversational": true
 }`;
 
 function parseExtractionResult(raw: string): ExtractionResult {
@@ -246,11 +180,10 @@ function parseExtractionResult(raw: string): ExtractionResult {
             keywords: Array.isArray(parsed.keywords) ? parsed.keywords : [],
             selectedFiles: Array.isArray(parsed.selectedFiles) ? parsed.selectedFiles : [],
             isConversational: !!parsed.isConversational,
-            webSearchQueries: Array.isArray(parsed.webSearchQueries) ? parsed.webSearchQueries.slice(0, 3) : [],
         };
     } catch (err) {
         console.warn('[AI] Extraction parse failed, assuming conversational:', err);
-        return { keywords: [], selectedFiles: [], isConversational: true, webSearchQueries: [] };
+        return { keywords: [], selectedFiles: [], isConversational: true };
     }
 }
 
@@ -271,7 +204,7 @@ async function llmStepExtract(userMessage: string, availableFiles: string[], cal
     return parseExtractionResult(raw);
 }
 
-function buildOllamaResponsePrompt(searchResults: SearchResult[], extraction: ExtractionResult, webSearchContext: string): string {
+function buildOllamaResponsePrompt(searchResults: SearchResult[], extraction: ExtractionResult): string {
     const dataSection = buildGeoSearchContext(searchResults);
 
     return `Jsi ZIJE!SE AI — sebevědomý, nadšený a optimistický asistent pro bydlení v České republice. Máš rád svou práci a jsi si jistý informacemi, které sdílíš.
@@ -279,8 +212,6 @@ function buildOllamaResponsePrompt(searchResults: SearchResult[], extraction: Ex
 ## DATA K DISPOZICI (INTERNÍ — NEZMIŇUJ ZDROJE)
 
 ${dataSection}
-
-${webSearchContext ? `${webSearchContext}` : ''}
 
 ## JAK ODPOVÍDAT
 
@@ -290,45 +221,36 @@ ${webSearchContext ? `${webSearchContext}` : ''}
 - Na konci VŽDY uveď sekci "**Souhrn**" s odrážkami klíčových zjištění.
 
 **PRAVIDLA:**
-- Mluv POUZE o věcech, které jsi skutečně našel v datech. Pokud v datech něco není, VŮBEC to nezmiňuj — ani neříkej, že to nebylo nalezeno.
-- NIKDY nezmiňuj technické detaily: žádné "GeoJSON", "databáze", "API", "Google Places", "vyhledávač", "DuckDuckGo", "scraping", "soubory". Pro uživatele jsi prostě chytrý asistent, který ví.
-- NIKDY neopakuj informaci, kterou jsi už řekl — ani jinými slovy.
-- Pokud jsi něco už zmínil v předchozí zprávě konverzace, NEOPAKUJ to.
+- Mluv POUZE o věcech, které jsi skutečně našel v datech. Pokud v datech něco není, VŮBEC to nezmiňuj.
+- NIKDY nezmiňuj: "GeoJSON", "databáze", "API", "Google Places", "vyhledávač", "soubory", "datasety". Prezentuj data jako své vlastní znalosti.
+- NIKDY NEOPAKUJ informaci — ani jinými slovy.
 - Irelevantní informace přeskoč úplně.
-- NIKDY nevymýšlej URL ani ceny. URL nepiš vůbec, ceny uváděj jen pokud je máš v datech.
-- NIKDY nepoužívej placeholder text jako "[název]".
-- Odpovídej ČESKY, pokud uživatel nepíše anglicky.
+- NIKDY nevymýšlej URL ani ceny.
+- Odpovídej ČESKY.
 
-**STRUKTURA ODPOVĚDI:**
-1. Krátký úvod (1–2 věty, nadšený tón)
-2. Konkrétní informace z dat (stručně, bez opakování)
+**STRUKTURA:**
+1. Krátký nadšený úvod (1–2 věty)
+2. Konkrétní informace — stručně
 3. **Souhrn** — odrážky s klíčovými body
 
-## MAPOVÉ PŘÍKAZY (interní, uživatel je nevidí)
+## MAPOVÉ PŘÍKAZY (interní)
 
-Když uživatel hledá místo:
-\`\`\`json:pois
-{
-  "amenity": "pharmacy",
-  "lat": 50.0477,
-  "lng": 15.7583,
-  "radius": 1000,
-  "label": "Lékárny v okolí"
-}
-\`\`\`
-
-ZKRATKY: amenity: pharmacy, hospital, doctors, dentist, school, kindergarten, university, library, bank, atm, post_office, police, fire_station, fuel, restaurant, cafe, fast_food, bar, pub, cinema, theatre, townhall, courthouse, parking, veterinary, marketplace | shop: supermarket, convenience, bakery, butcher, clothes, electronics, hardware, furniture | leisure: park, playground, sports_centre, swimming_pool, fitness_centre, stadium
-
-ŠKOLY: ZŠ→amenity=school+"nameFilter":"ZŠ|Základní škola" | SŠ→amenity=school+"nameFilter":"SŠ|SPŠ|SOŠ|Gymnázium|Střední škola" | ZUŠ→amenity=school+"nameFilter":"ZUŠ|Základní umělecká" | VŠ→amenity=university | MŠ→amenity=kindergarten
-
-TAGY: obecní úřad→"tag":["amenity=townhall","office=government"] | soud→"tag":"amenity=courthouse" | muzeum→"tag":"tourism=museum" | pošta→"tag":"amenity=post_office"
-
-Zobrazení oblasti:
+### json:location — POVINNÉ
+VŽDY když zmíníš jakékoliv město, obec, čtvrť, region nebo kraj, MUSÍŠ přidat json:location blok. Bez něj se na mapě nezobrazí obrys oblasti. Max 3 na odpověď.
 \`\`\`json:location
 {"place":"Praha 6, Česká republika","label":"Praha 6"}
 \`\`\`
 
-GeoJSON filtr:
+### json:pois — pro hledání míst
+\`\`\`json:pois
+{"amenity":"pharmacy","lat":50.0477,"lng":15.7583,"radius":1000,"label":"Lékárny v okolí"}
+\`\`\`
+
+ZKRATKY: amenity: pharmacy, hospital, doctors, dentist, school, kindergarten, university, library, bank, atm, post_office, police, fire_station, fuel, restaurant, cafe, fast_food, bar, pub, cinema, theatre, townhall, courthouse, parking, veterinary, marketplace | shop: supermarket, convenience, bakery, butcher, clothes, electronics, hardware, furniture | leisure: park, playground, sports_centre, swimming_pool, fitness_centre, stadium
+ŠKOLY: ZŠ→amenity=school+"nameFilter":"ZŠ|Základní škola" | SŠ→amenity=school+"nameFilter":"SŠ|SPŠ|SOŠ|Gymnázium|Střední škola" | ZUŠ→amenity=school+"nameFilter":"ZUŠ|Základní umělecká" | VŠ→amenity=university | MŠ→amenity=kindergarten
+TAGY: obecní úřad→"tag":["amenity=townhall","office=government"] | soud→"tag":"amenity=courthouse" | muzeum→"tag":"tourism=museum" | pošta→"tag":"amenity=post_office"
+
+### json:filters — GeoJSON filtr
 \`\`\`json:filters
 {"dataset":"soubor.geojson","filters":{"property":"hodnota"}}
 \`\`\``;
@@ -343,7 +265,7 @@ Pravidla:
 - NIKDY nezmiňuj technické detaily (API, databáze, GeoJSON, vyhledávače). Prostě pomáháš.
 - Navazuj na předchozí konverzaci. Neopakuj se.`;
 
-function buildGeminiFinalPrompt(geoSearchContext: string, placesContext: string | null, webSearchContext: string, extraction: ExtractionResult, anyPlacesFound: boolean,): string {
+function buildGeminiFinalPrompt(geoSearchContext: string, placesContext: string | null, extraction: ExtractionResult, anyPlacesFound: boolean,): string {
     return `Jsi ZIJE!SE AI — sebevědomý, nadšený a optimistický asistent pro bydlení v České republice. Miluješ svou práci a jsi si jistý informacemi, které sdílíš.
 
 # DATA K DISPOZICI (INTERNÍ — NIKDY NEZMIŇUJ ZDROJE ANI TECHNOLOGIE)
@@ -352,48 +274,49 @@ ${geoSearchContext}
 
 ${placesContext || ''}
 
-${webSearchContext || ''}
-
 # JAK ODPOVÍDAT
 
 **STYL:**
-- Piš SEBEVĚDOMĚ a NADŠENĚ. Žádné "možná", "pravděpodobně", "bohužel" — pokud máš data, prezentuj je s jistotou a energií.
-- Buď STRUČNÝ. Žádné slohy ani opakování. Krátké věty, jasné informace, konkrétní fakta.
+- Piš SEBEVĚDOMĚ a NADŠENĚ. Žádné "možná", "pravděpodobně", "bohužel" — pokud máš data, prezentuj je s jistotou.
+- Buď STRUČNÝ. Žádné slohy. Krátké věty, jasné informace.
 - Na konci VŽDY uveď sekci "**Souhrn**" s odrážkami klíčových zjištění.
 
 **STRIKTNÍ PRAVIDLA:**
-1. Mluv POUZE o tom, co jsi SKUTEČNĚ NAŠEL v datech. Pokud v datech něco není, VŮBEC to nezmiňuj — neříkej "nebylo nalezeno", "nemám informace", "nepodařilo se najít". Prostě to přeskoč.
-2. NIKDY nezmiňuj: "GeoJSON", "databáze", "API", "Google Places", "vyhledávač", "DuckDuckGo", "web search", "scraping", "soubory", "datasety", "Overpass", "Nominatim". Pro uživatele jsi prostě chytrý asistent, který ví. Informace prezentuješ jako své vlastní znalosti.
-3. NIKDY NEOPAKUJ informaci, kterou jsi už řekl — ani jinými slovy, ani v souhrnu pokud už zazněla v textu nad ním.
-4. Pokud jsi něco zmínil v předchozí zprávě konverzace, NEŘÍKEJ to znovu.
-5. Irelevantní informace PŘESKOČ. Pokud data neodpovídají dotazu, nekomentuj to.
-6. NIKDY nevymýšlej URL ani ceny. URL nepiš vůbec. Ceny uváděj jen pokud je máš v datech.
-7. NIKDY nepoužívej placeholder text jako "[název]" nebo "[město]".
-8. Odpovídej ČESKY.
+1. Mluv POUZE o tom, co jsi SKUTEČNĚ NAŠEL v datech. Pokud v datech něco není, VŮBEC to nezmiňuj — neříkej "nebylo nalezeno", "nemám informace". Prostě to přeskoč.
+2. NIKDY nezmiňuj: "GeoJSON", "databáze", "API", "Google Places", "vyhledávač", "DuckDuckGo", "web search", "scraping", "soubory", "datasety", "Overpass", "Nominatim". Prezentuj data jako své vlastní znalosti.
+3. NIKDY NEOPAKUJ informaci — ani jinými slovy, ani v souhrnu.
+4. Pokud jsi to zmínil v předchozí zprávě konverzace, NEŘÍKEJ to znovu.
+5. Irelevantní informace PŘESKOČ.
+6. NIKDY nevymýšlej URL ani ceny.
+7. Odpovídej ČESKY.
 
-**STRUKTURA ODPOVĚDI:**
+**STRUKTURA:**
 1. Krátký nadšený úvod (1–2 věty)
 2. Konkrétní informace — stručně, bez opakování
 ${anyPlacesFound ? '3. U nalezených míst uveď názvy a adresy' : ''}
-4. **Souhrn** — odrážky POUZE s novými klíčovými body (ne opakování textu výše)
+4. **Souhrn** — odrážky POUZE s novými klíčovými body
 
 # MAPOVÉ PŘÍKAZY (interní, uživatel je nevidí)
 
+## json:location — POVINNÉ PRO KAŽDÉ ZMÍNĚNÉ MÍSTO
+VŽDY když ve své odpovědi zmíníš jakékoliv město, obec, čtvrť, region nebo kraj, MUSÍŠ přidat json:location blok. Toto je POVINNÉ — bez tohoto bloku se na mapě nezobrazí obrys oblasti. I když uživatel explicitně nežádá zobrazení na mapě, přidej ho.
+Název MUSÍ být jednoznačný — vždy přidej ", Česká republika".
+Max 3 bloky na odpověď.
+
+\`\`\`json:location
+{"place":"Vinohrady, Praha, Česká republika","label":"Praha 2 - Vinohrady"}
+\`\`\`
+
 ${anyPlacesFound
-        ? 'NEPŘIDÁVEJ json:pois bloky — místa jsou již zobrazena na mapě.'
-        : `Pokud uživatel hledá místa, přidej:
+        ? '## json:pois — NEPŘIDÁVEJ, místa jsou již na mapě.'
+        : `## json:pois — pro vyhledání míst na mapě
 \`\`\`json:pois
 {"type":"Google Places typ","keyword":"dotaz","placeName":"Město, Česká republika","label":"Popis"}
 \`\`\`
 Typy: pharmacy, hospital, doctor, dentist, primary_school, secondary_school, preschool, university, restaurant, cafe, bar, bakery, supermarket, convenience_store, park, playground, sports_complex, swimming_pool, fitness_center, bank, atm, post_office, police, fire_station, parking, veterinary_care, gas_station, car_repair, hotel, city_hall, courthouse, museum, movie_theater, library
 Školy: ZŠ=primary_school+keyword:"základní škola ZŠ" | SŠ=secondary_school+keyword:"střední škola gymnázium" | MŠ=keyword:"mateřská škola MŠ školka" | VŠ=university`}
 
-VŽDY přidej json:location pro zmíněná místa:
-\`\`\`json:location
-{"place":"Název, Česká republika","label":"Krátký popis"}
-\`\`\`
-
-GeoJSON filtr (pokud relevantní):
+## json:filters — GeoJSON filtr (pokud relevantní)
 \`\`\`json:filters
 {"dataset":"soubor.geojson","filters":{"property":"hodnota"}}
 \`\`\``;
@@ -406,7 +329,6 @@ Tvůj úkol:
 2. Ze seznamu GeoJSON souborů vyber 0–5 relevantních podle názvu/cesty.
 3. Urči, zda je dotaz konverzační nebo analytický.
 4. Pokud uživatel hledá konkrétní typ místa, vygeneruj json:pois blok.
-5. Pokud uživatel potřebuje aktuální informace z internetu (ceny, konkrétní instituce, novinky, dopravní spojení, recenze lokalit apod.), navrhni 1–3 vyhledávací dotazy v poli "webSearchQueries".
 
 Odpověz takto — NEJDŘÍVE JSON blok, pak volitelně mapové příkazy:
 
@@ -414,17 +336,9 @@ Odpověz takto — NEJDŘÍVE JSON blok, pak volitelně mapové příkazy:
 {
   "keywords": ["klíčové", "slovo"],
   "selectedFiles": ["cesta/soubor.geojson"],
-  "isConversational": false,
-  "webSearchQueries": ["ceny bytů Praha 2025", "recenze čtvrť Vinohrady"]
+  "isConversational": false
 }
 \`\`\`
-
-Příklady kdy použít webSearchQueries:
-- Aktuální ceny → ["průměrné ceny bytů Praha 2025"]
-- Kvalita školy → ["hodnocení ZŠ Pardubice recenze"]
-- Dopravní spojení → ["MHD spojení Praha 6 centrum"]
-- Novinky o lokalitě → ["novinky výstavba Brno jih 2025"]
-Pokud web search není potřeba, dej prázdné pole: "webSearchQueries": []
 
 Pokud uživatel hledá místa, PŘIDEJ json:pois blok (Google Places typy):
 \`\`\`json:pois
@@ -440,8 +354,7 @@ Pokud je dotaz konverzační:
 {
   "keywords": [],
   "selectedFiles": [],
-  "isConversational": true,
-  "webSearchQueries": []
+  "isConversational": true
 }
 \`\`\`
 
@@ -630,63 +543,119 @@ async function fetchPlacesForPoi(apiKey: string, poiReq: any): Promise<any[]> {
     let lng: number | null = poiReq.lng ?? null;
     let radius = poiReq.radius != null ? Math.max(100, Math.min(50000, Number(poiReq.radius))) : 1000;
 
+    // Resolve placeName to coordinates
     if (poiReq.placeName && (lat == null || lng == null)) {
         const resolved = await nominatimResolve(poiReq.placeName);
         if (resolved) { lat = resolved.lat; lng = resolved.lng; radius = resolved.radius; }
-    }
-    if (lat == null || lng == null) return [];
-
-    try {
-        let placesData: any;
-        if (poiReq.keyword) {
-            const latDelta = radius / 111000;
-            const lngDelta = radius / (111000 * Math.cos(lat * Math.PI / 180));
-            const body: any = {
-                textQuery: poiReq.keyword,
-                maxResultCount: 20,
-                locationRestriction: {
-                    rectangle: {
-                        low: { latitude: lat - latDelta, longitude: lng - lngDelta },
-                        high: { latitude: lat + latDelta, longitude: lng + lngDelta },
-                    },
-                },
-                regionCode: 'CZ',
-                languageCode: 'cs',
-            };
-            if (poiReq.type && !Array.isArray(poiReq.type)) body.includedType = poiReq.type;
-            const res = await fetch(`${PLACES_BASE}:searchText`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': apiKey, 'X-Goog-FieldMask': FIELD_MASK },
-                body: JSON.stringify(body),
-            });
-            if (!res.ok) return [];
-            placesData = await res.json();
-        } else if (poiReq.type) {
-            const types = Array.isArray(poiReq.type) ? poiReq.type : [poiReq.type];
-            const res = await fetch(`${PLACES_BASE}:searchNearby`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': apiKey, 'X-Goog-FieldMask': FIELD_MASK },
-                body: JSON.stringify({
-                    includedTypes: types,
-                    maxResultCount: 20,
-                    locationRestriction: { circle: { center: { latitude: lat, longitude: lng }, radius } },
-                    languageCode: 'cs',
-                }),
-            });
-            if (!res.ok) return [];
-            placesData = await res.json();
-        } else {
-            return [];
+        else {
+            // Retry without "Česká republika"
+            const stripped = poiReq.placeName.replace(/,?\s*Česká republika/i, '').trim();
+            if (stripped !== poiReq.placeName) {
+                const resolved2 = await nominatimResolve(stripped);
+                if (resolved2) { lat = resolved2.lat; lng = resolved2.lng; radius = resolved2.radius; }
+            }
         }
-        return (placesData.places || []).map((p: any) => ({
-            name: p.displayName?.text || '',
-            address: p.formattedAddress || '',
-            phone: p.nationalPhoneNumber || '',
-            website: p.websiteUri || '',
-            lat: p.location?.latitude,
-            lng: p.location?.longitude,
-        }));
-    } catch { return []; }
+    }
+    if (lat == null || lng == null) {
+        console.warn(`[Places] Cannot resolve location for: ${JSON.stringify(poiReq).slice(0, 200)}`);
+        return [];
+    }
+
+    // Build search keyword from available fields
+    const searchKeyword = poiReq.keyword || poiReq.label || poiReq.type || '';
+
+    // Strategy: try text search first (most flexible), then nearby, then retry with wider radius
+    const attempts: { method: 'text' | 'nearby'; searchRadius: number }[] = [];
+
+    if (searchKeyword) {
+        attempts.push({ method: 'text', searchRadius: radius });
+        attempts.push({ method: 'text', searchRadius: Math.min(radius * 3, 50000) }); // wider retry
+    }
+    if (poiReq.type) {
+        attempts.push({ method: 'nearby', searchRadius: radius });
+        attempts.push({ method: 'nearby', searchRadius: Math.min(radius * 3, 50000) }); // wider retry
+    }
+    // Last resort: text search with just the label
+    if (!searchKeyword && poiReq.label) {
+        attempts.push({ method: 'text', searchRadius: Math.min(radius * 3, 50000) });
+    }
+
+    for (const attempt of attempts) {
+        try {
+            let placesData: any;
+
+            if (attempt.method === 'text') {
+                const query = searchKeyword || poiReq.label || '';
+                if (!query) continue;
+
+                const latDelta = attempt.searchRadius / 111000;
+                const lngDelta = attempt.searchRadius / (111000 * Math.cos(lat * Math.PI / 180));
+                const body: any = {
+                    textQuery: query,
+                    maxResultCount: 20,
+                    locationRestriction: {
+                        rectangle: {
+                            low: { latitude: lat - latDelta, longitude: lng - lngDelta },
+                            high: { latitude: lat + latDelta, longitude: lng + lngDelta },
+                        },
+                    },
+                    regionCode: 'CZ',
+                    languageCode: 'cs',
+                };
+                if (poiReq.type && !Array.isArray(poiReq.type)) body.includedType = poiReq.type;
+
+                const res = await fetch(`${PLACES_BASE}:searchText`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': apiKey, 'X-Goog-FieldMask': FIELD_MASK },
+                    body: JSON.stringify(body),
+                });
+                if (!res.ok) {
+                    console.warn(`[Places] Text search failed (${res.status}) for "${query}" r=${attempt.searchRadius}`);
+                    continue;
+                }
+                placesData = await res.json();
+
+            } else {
+                const types = Array.isArray(poiReq.type) ? poiReq.type : [poiReq.type];
+                const res = await fetch(`${PLACES_BASE}:searchNearby`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': apiKey, 'X-Goog-FieldMask': FIELD_MASK },
+                    body: JSON.stringify({
+                        includedTypes: types,
+                        maxResultCount: 20,
+                        locationRestriction: { circle: { center: { latitude: lat, longitude: lng }, radius: attempt.searchRadius } },
+                        languageCode: 'cs',
+                    }),
+                });
+                if (!res.ok) {
+                    console.warn(`[Places] Nearby search failed (${res.status}) for types=[${types}] r=${attempt.searchRadius}`);
+                    continue;
+                }
+                placesData = await res.json();
+            }
+
+            const results = (placesData.places || []).map((p: any) => ({
+                name: p.displayName?.text || '',
+                address: p.formattedAddress || '',
+                phone: p.nationalPhoneNumber || '',
+                website: p.websiteUri || '',
+                lat: p.location?.latitude,
+                lng: p.location?.longitude,
+            }));
+
+            if (results.length > 0) {
+                console.log(`[Places] Found ${results.length} via ${attempt.method} (r=${attempt.searchRadius})`);
+                return results;
+            }
+
+            console.log(`[Places] 0 results via ${attempt.method} (r=${attempt.searchRadius}), trying next...`);
+        } catch (err: any) {
+            console.warn(`[Places] Error in ${attempt.method} attempt:`, err.message);
+        }
+    }
+
+    console.warn(`[Places] All attempts exhausted, 0 results for: ${JSON.stringify(poiReq).slice(0, 200)}`);
+    return [];
 }
 
 function buildPlacesContextForAI(results: { label: string; places: any[]; found: boolean }[]): string {
@@ -709,6 +678,43 @@ function buildPlacesContextForAI(results: { label: string; places: any[]; found:
     return lines.join('\n');
 }
 
+// ── Context Helpers ──────────────────────────────────────────────────────────
+
+/**
+ * Extract coordinate/tile context from system messages and separate
+ * clean conversation messages (user + assistant only) for the final LLM call.
+ * This prevents the frontend's generic SYSTEM_PROMPT from conflicting with
+ * our specific pipeline prompts.
+ */
+function extractConversationContext(messages: ChatMessage[]): {
+    coordinateContext: string;
+    cleanMessages: ChatMessage[];
+} {
+    const coordParts: string[] = [];
+    const cleanMessages: ChatMessage[] = [];
+
+    for (const msg of messages) {
+        if (msg.role === 'system') {
+            // Extract coordinate/tile context from system messages
+            if (msg.content.includes('zeměpisná šířka') || msg.content.includes('souřadnice') || msg.content.includes('dlaždice')) {
+                coordParts.push(msg.content);
+            }
+            // Also keep questionnaire data
+            if (msg.content.includes('dotazník') || msg.content.includes('preference bydlení')) {
+                coordParts.push(msg.content);
+            }
+            // Skip everything else (frontend's generic SYSTEM_PROMPT etc.)
+        } else {
+            cleanMessages.push(msg);
+        }
+    }
+
+    return {
+        coordinateContext: coordParts.join('\n'),
+        cleanMessages,
+    };
+}
+
 export async function POST(request: NextRequest) {
     try {
         const data: ChatRequest = await request.json();
@@ -722,10 +728,14 @@ export async function POST(request: NextRequest) {
 
         const geoFiles = listGeoJsonFiles();
 
+        // Extract coordinate context and clean conversation messages
+        const { coordinateContext, cleanMessages } = extractConversationContext(conversationMessages);
+
         console.log("\n" + "=".repeat(60));
         console.log(`[AI] Model: ${model}${model === 'gemini' ? ` (${GEMINI_PRIMARY}, fallback: ${GEMINI_FALLBACK})` : ''}`);
         console.log(`[AI] GeoJSON files: ${geoFiles.length}`);
-        console.log(`[AI] Conversation messages: ${conversationMessages.length}`);
+        console.log(`[AI] Conversation messages: ${conversationMessages.length} (clean: ${cleanMessages.length})`);
+        console.log(`[AI] Coordinate context: ${coordinateContext ? 'yes' : 'none'}`);
         console.log(`[AI] User query: "${lastUserMsg.content.slice(0, 150)}"`);
         console.log("-".repeat(60));
 
@@ -795,36 +805,28 @@ export async function POST(request: NextRequest) {
                 if (!anyPlacesFound) step1Pois = [];
             }
 
-            let webSearchContext = '';
-            let webSearchResults: WebSearchResult[] = [];
-            if (!extraction.isConversational && extraction.webSearchQueries.length > 0) {
-                console.log(`[AI Gemini] Web search: ${extraction.webSearchQueries.length} queries`);
-                webSearchResults = await performWebSearch(extraction.webSearchQueries);
-                webSearchContext = buildWebSearchContext(webSearchResults);
-                console.log(`[AI Gemini] Web search context: ${(webSearchContext.length / 1024).toFixed(1)} KB`);
-            }
-
             if (extraction.isConversational) {
                 const messages: ChatMessage[] = [
                     { role: 'system', content: CONVERSATIONAL_PROMPT },
-                    ...conversationMessages,
+                    ...(coordinateContext ? [{ role: 'system' as const, content: coordinateContext }] : []),
+                    ...cleanMessages,
                 ];
                 replyContent = await call_gemini(messages);
             } else {
                 const finalPrompt = buildGeminiFinalPrompt(
                     geoSearchContext,
                     placesContext,
-                    webSearchContext,
                     extraction,
                     anyPlacesFound,
                 );
 
                 const messages: ChatMessage[] = [
                     { role: 'system', content: finalPrompt },
-                    ...conversationMessages,
+                    ...(coordinateContext ? [{ role: 'system' as const, content: `Kontext uživatele:\n${coordinateContext}` }] : []),
+                    ...cleanMessages,
                 ];
 
-                console.log(`[AI Gemini Final] prompt ${(finalPrompt.length / 1024).toFixed(1)} KB`);
+                console.log(`[AI Gemini Step 4] Final call — prompt ${(finalPrompt.length / 1024).toFixed(1)} KB`);
                 replyContent = await call_gemini(messages);
             }
 
@@ -836,8 +838,6 @@ export async function POST(request: NextRequest) {
                     file: r.file,
                     matches: r.matchedFeatures,
                 })),
-                webSearchQueries: extraction.webSearchQueries,
-                webSearchSources: webSearchResults.flatMap(r => r.snippets.map(s => s.domain)),
             };
 
         } else {
@@ -856,22 +856,14 @@ export async function POST(request: NextRequest) {
             }
             console.log(`[AI Ollama] Search: ${searchResults.length} files with matches`);
 
-            let webSearchContext = '';
-            let webSearchResults: WebSearchResult[] = [];
-            if (!extraction.isConversational && extraction.webSearchQueries.length > 0) {
-                console.log(`[AI Ollama] Web search: ${extraction.webSearchQueries.length} queries`);
-                webSearchResults = await performWebSearch(extraction.webSearchQueries);
-                webSearchContext = buildWebSearchContext(webSearchResults);
-                console.log(`[AI Ollama] Web search context: ${(webSearchContext.length / 1024).toFixed(1)} KB`);
-            }
-
             const systemPrompt = extraction.isConversational
                 ? CONVERSATIONAL_PROMPT
-                : buildOllamaResponsePrompt(searchResults, extraction, webSearchContext);
+                : buildOllamaResponsePrompt(searchResults, extraction);
 
             const step3Messages: ChatMessage[] = [
                 { role: 'system', content: systemPrompt },
-                ...conversationMessages,
+                ...(coordinateContext ? [{ role: 'system' as const, content: coordinateContext }] : []),
+                ...cleanMessages,
             ];
 
             console.log(`[AI Ollama] Step 3: prompt ${(systemPrompt.length / 1024).toFixed(1)} KB, ${step3Messages.length} msgs`);
@@ -885,8 +877,6 @@ export async function POST(request: NextRequest) {
                     file: r.file,
                     matches: r.matchedFeatures,
                 })),
-                webSearchQueries: extraction.webSearchQueries,
-                webSearchSources: webSearchResults.flatMap(r => r.snippets.map(s => s.domain)),
             };
         }
 
