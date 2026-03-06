@@ -127,7 +127,21 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
     const [thinkingSteps, setThinkingSteps] = useState<ThinkingStep[]>([]);
     const [contextNote, setContextNote] = useState<string | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
+
+    const adjustHeight = () => {
+        if (textareaRef.current) {
+            textareaRef.current.style.height = 'auto';
+            const newHeight = Math.min(textareaRef.current.scrollHeight, 200);
+            textareaRef.current.style.height = `${newHeight}px`;
+            textareaRef.current.style.overflowY = textareaRef.current.scrollHeight > 200 ? 'auto' : 'hidden';
+        }
+    };
+
+    useEffect(() => {
+        adjustHeight();
+    }, [input]);
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -592,29 +606,36 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
                         {language === 'cs' ? 'Pro použití AI chatu se přihlaste' : 'Log in to use AI chat'}
                     </div>
                 )}
-                <div className="flex relative items-center">
-                    <input
-                        type="text"
+                <div className="flex relative items-end">
+                    <textarea
+                        ref={textareaRef}
+                        rows={1}
                         value={input}
                         disabled={!isLoggedIn || isLoading}
                         onChange={(e) => setInput(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handle_send()}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                handle_send();
+                            }
+                        }}
                         placeholder={
                             language === 'cs'
                                 ? (isLoggedIn ? 'Zeptejte se AI...' : 'Přihlaste se pro chat...')
                                 : (isLoggedIn ? 'Ask AI...' : 'Log in to chat...')
                         }
-                        className={`w-full bg-[#1a1a1a] dark:bg-[#ececeb] text-white dark:text-black border rounded-full pl-4 pr-12 py-3 transition-all text-sm backdrop-blur-md ${isLoggedIn
+                        className={`w-full bg-[#1a1a1a] dark:bg-[#ececeb] text-white dark:text-black border rounded-[22px] pl-4 pr-12 py-3.5 transition-all text-sm backdrop-blur-md resize-none overflow-hidden ${isLoggedIn
                             ? 'border-white/10 dark:border-black/10 opacity-100 cursor-text focus:border-[#3388ff]/50 focus:ring-1 focus:ring-[#3388ff]/20 focus:outline-none'
                             : 'border-white/10 dark:border-black/10 opacity-50 cursor-not-allowed group-hover:border-[#3388ff]/30'
                             }`}
+                        style={{ minHeight: '48px', maxHeight: '200px' }}
                     />
 
                     {isLoggedIn ? (
                         <button
                             onClick={handle_send}
                             disabled={!input.trim() || isLoading}
-                            className={`absolute right-1.5 w-8 h-8 flex items-center justify-center rounded-full transition-all cursor-pointer ${input.trim() && !isLoading
+                            className={`absolute right-2 bottom-2 w-8 h-8 flex items-center justify-center rounded-full transition-all cursor-pointer ${input.trim() && !isLoading
                                 ? 'bg-[#3388ff] text-white hover:bg-[#2563eb] scale-100 active:scale-90'
                                 : 'bg-white/5 dark:bg-black/5 text-white dark:text-black opacity-40 cursor-default'
                                 }`}
@@ -622,7 +643,7 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
                             <Send size={14} />
                         </button>
                     ) : (
-                        <div className="absolute right-1.5 w-8 h-8 flex items-center justify-center rounded-full bg-white/5 dark:bg-black/5 text-white dark:text-black transition-colors pointer-events-none">
+                        <div className="absolute right-2 bottom-2 w-8 h-8 flex items-center justify-center rounded-full bg-white/5 dark:bg-black/5 text-white dark:text-black transition-colors pointer-events-none">
                             <Lock size={14} className="opacity-0 group-hover:opacity-100 transition-opacity text-[#3388ff]" />
                             <Send size={14} className="absolute opacity-50 group-hover:opacity-0 transition-opacity translate-x-[1px]" />
                         </div>

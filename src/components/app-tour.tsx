@@ -246,8 +246,9 @@ export function AppTour() {
     const handleCallback = (data: CallBackProps) => {
         const { status, index, type, action, step } = data;
 
-        if (status === STATUS.FINISHED || status === STATUS.SKIPPED) {
+        if (status === STATUS.FINISHED || status === STATUS.SKIPPED || action === 'close' || action === 'skip') {
             setRun(false);
+            setStepIndex(0);
             localStorage.setItem(TOUR_KEY, "true");
             window.dispatchEvent(new CustomEvent('tour:focus', { detail: { target: "body" } }));
             return;

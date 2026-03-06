@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
-import { ArrowLeft, BotMessageSquare, ListChecks, PanelLeftClose, PanelLeft, Globe, ChevronDown, Settings2, LogOut, User, MapPin, Database } from "lucide-react";
+import { ArrowLeft, BotMessageSquare, ListChecks, PanelLeftClose, PanelLeft, Globe, ChevronDown, Settings2, LogOut, User, MapPin, Database, Folder } from "lucide-react";
 import { useLanguage } from "@/components/providers/language-provider";
 import { Logo } from "@/components/logo";
 import { ModeToggle } from "@/components/mode-toggle";
@@ -744,7 +744,10 @@ export default function AppPage() {
                                                 className={`group outline-none focus:outline-none focus:ring-0 flex items-center justify-between transition-all transform-gpu duration-300 ease-in-out ${!hasData ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer active:translate-y-px'} px-5 py-3 w-full text-sm font-medium rounded-full bg-[#1a1a1a] dark:bg-[#ececeb] text-white dark:text-black hover:bg-[#222222] dark:hover:bg-[#dcdcdc] border border-white/10 dark:border-black/10`}
                                                 title={!hasData ? (language === 'cs' ? 'Prázdný' : 'Empty') : region.label}
                                             >
-                                                <span className="flex-1 text-left truncate">{region.label}</span>
+                                                <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                    <Folder size={13} className="shrink-0 opacity-60" />
+                                                    <span className="flex-1 text-left truncate">{region.label}</span>
+                                                </div>
                                                 {hasData && (
                                                     <div className="flex items-center gap-1.5 shrink-0 ml-2">
                                                         <span className="text-[11px] tabular-nums opacity-50 font-mono">{catCount}</span>
