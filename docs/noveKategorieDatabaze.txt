@@ -19,7 +19,7 @@
 19 naštudovat datasety
 20
 21
-22 naturalPark bude v nějakém datasetu
+22
 23
 24
 25
