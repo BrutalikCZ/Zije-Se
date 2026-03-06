@@ -8,6 +8,8 @@ export type User = {
     name: string;
     credits: number;
     questionnaireData?: any;
+    mapSettings?: any;
+    aiSettings?: any;
 };
 
 type AuthContextType = {

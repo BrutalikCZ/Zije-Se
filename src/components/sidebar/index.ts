@@ -8,3 +8,4 @@ export * from './region-data-panel';
 export * from './datasets-panel';
 export { SettingsPanel } from './settings-panel';
 export { QuestionnairePanel } from './questionnaire-panel';
+export * from './feature-info-panel';

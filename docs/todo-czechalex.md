@@ -1,17 +1,9 @@
 TODO:
-Přidat když kliknu na místo tak že mi vyjednou detaily o samotném datasetu
-
-Nastavení pro AI
-
 Dodělat main page stránky - lépe nadesignovat gdpr, podmínky, kontakt apod.
 
 Přidat customizaci profilu
 
-přidat tutorial na stránku
-
 přidat skeleton loader na načítání
-
-přidat shadcn/resizable pro sidebar apod.
 
 "nacita se dataset.................."
 
@@ -25,3 +17,11 @@ fix dotazníku
 scroll
 
 vedle nazvu modry cislo
+
+Nastavení pro AI
+
+přidat tutorial na stránku
+
+přidat shadcn/resizable pro sidebar apod. (vyřešeno lokálně bez instalace)
+
+Přidat když kliknu na místo tak že mi vyjednou detaily o samotném datasetu

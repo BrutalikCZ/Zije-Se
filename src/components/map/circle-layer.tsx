@@ -11,6 +11,7 @@ export type MapCircleLayerProps = {
     opacity?: number;
     outlineColor?: string;
     autoFlyTo?: boolean;
+    onClick?: (feature: any) => void;
 };
 
 export function MapCircleLayer({
@@ -21,6 +22,7 @@ export function MapCircleLayer({
     opacity = 0.85,
     outlineColor = "#ffffff",
     autoFlyTo = false,
+    onClick,
 }: MapCircleLayerProps) {
     const { map, isLoaded } = useMap();
     const autoId = useId();
@@ -29,23 +31,49 @@ export function MapCircleLayer({
     const layerId = `circle-layer-${id}`;
     const didFly = useRef(false);
 
+    const onClickRef = useRef(onClick);
+    onClickRef.current = onClick;
+
     useEffect(() => {
         if (!isLoaded || !map) return;
 
         try {
-            map.addSource(sourceId, { type: "geojson", data: data as any });
-            map.addLayer({
-                id: layerId,
-                type: "circle",
-                source: sourceId,
-                paint: {
-                    "circle-color": color,
-                    "circle-radius": radius,
-                    "circle-opacity": opacity,
-                    "circle-stroke-width": 2,
-                    "circle-stroke-color": outlineColor,
-                },
-            });
+            if (!map.getSource(sourceId)) {
+                map.addSource(sourceId, { type: "geojson", data: data as any });
+            }
+
+            if (!map.getLayer(layerId)) {
+                map.addLayer({
+                    id: layerId,
+                    type: "circle",
+                    source: sourceId,
+                    paint: {
+                        "circle-color": color,
+                        "circle-radius": radius,
+                        "circle-opacity": opacity,
+                        "circle-stroke-width": 2,
+                        "circle-stroke-color": outlineColor,
+                    },
+                });
+            }
+
+            const handleClick = (e: any) => {
+                if (onClickRef.current && e.features?.length > 0) {
+                    onClickRef.current(e.features[0]);
+                }
+            };
+
+            const handleMouseEnter = () => {
+                if (onClickRef.current) map.getCanvas().style.cursor = 'pointer';
+            };
+
+            const handleMouseLeave = () => {
+                map.getCanvas().style.cursor = '';
+            };
+
+            map.on('click', layerId, handleClick);
+            map.on('mouseenter', layerId, handleMouseEnter);
+            map.on('mouseleave', layerId, handleMouseLeave);
 
             if (autoFlyTo && !didFly.current && data.features.length > 0) {
                 didFly.current = true;
@@ -71,18 +99,20 @@ export function MapCircleLayer({
                     });
                 }
             }
+
+            return () => {
+                map.off('click', layerId, handleClick);
+                map.off('mouseenter', layerId, handleMouseEnter);
+                map.off('mouseleave', layerId, handleMouseLeave);
+                try {
+                    if (map.getLayer(layerId)) map.removeLayer(layerId);
+                    if (map.getSource(sourceId)) map.removeSource(sourceId);
+                } catch { }
+            };
         } catch (e) {
             console.warn("[MapCircleLayer] Error adding layer:", e);
         }
-
-        return () => {
-            try {
-                if (map.getLayer(layerId)) map.removeLayer(layerId);
-                if (map.getSource(sourceId)) map.removeSource(sourceId);
-            } catch { }
-        };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isLoaded, map, sourceId, layerId]);
+    }, [isLoaded, map, sourceId, layerId, color, radius, opacity, outlineColor, autoFlyTo, data]);
 
     // Update source data when data prop changes
     useEffect(() => {

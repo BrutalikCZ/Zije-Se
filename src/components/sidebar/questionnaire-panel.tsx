@@ -127,69 +127,71 @@ export function QuestionnairePanel({ isOpen, onClose, isCollapsed, setIsCollapse
             showAuthSection={mode === 'intro'}
             onLoginClick={onLoginClick}
         >
-            <div className="text-center shrink-0 mb-6 mt-4">
-                <h1 className="text-2xl font-black uppercase tracking-wider text-white dark:text-black mb-2">
-                    {language === 'cs' ? 'DOTAZNÍK' : 'QUESTIONNAIRE'}
-                </h1>
-                <p className="text-xs text-gray-400 dark:text-gray-500 mb-4 px-2">
-                    {language === 'cs' ? 'Vaše osobní preference pro ideální bydlení' : 'Your personal preferences for ideal living'}
-                </p>
-                <div className="h-px w-full bg-white/10 dark:bg-black/10"></div>
-            </div>
+            <div data-tour="questionnaire-panel-intro" className="flex-1 flex flex-col min-h-0 relative z-10 w-full">
+                <div className="text-center shrink-0 mb-6 mt-4">
+                    <h1 className="text-2xl font-black uppercase tracking-wider text-white dark:text-black mb-2">
+                        {language === 'cs' ? 'DOTAZNÍK' : 'QUESTIONNAIRE'}
+                    </h1>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mb-4 px-2">
+                        {language === 'cs' ? 'Vaše osobní preference pro ideální bydlení' : 'Your personal preferences for ideal living'}
+                    </p>
+                    <div className="h-px w-full bg-white/10 dark:bg-black/10"></div>
+                </div>
 
-            <div className="flex-1 overflow-hidden min-h-0 flex flex-col relative z-10">
-                {mode === 'result' ? (
-                    <QuestionnaireResult
-                        isFinished={isFinished}
-                        answeredCount={answeredCount}
-                        onContinue={handleResultContinue}
-                    />
-                ) : mode === 'intro' ? (
-                    <QuestionnaireIntro
-                        isLoggedIn={!!user}
-                        isFinished={isFinished}
-                        hasHistory={hasHistory}
-                        onStart={handleStartQuestionnaire}
-                        onSkip={handleSkip}
-                    />
-                ) : (
-                    <div className="flex flex-col h-full w-full">
-                        {/* @ts-ignore */}
-                        <Stepper
-                            ref={stepperRef}
-                            initialStep={calculatedInitialStep}
-                            completedSteps={completedSteps}
-                            className="!h-full !flex-1 flex flex-col"
-                            onStepChange={(step: number) => console.log(step)}
-                            onFinalStepCompleted={handleFinish}
-                            stepCircleContainerClassName="!max-w-full !w-full !h-full flex flex-col flex-1 bg-transparent !shadow-none border-none border-0 m-0 !bg-transparent rounded-none"
-                            stepContainerClassName="!px-0 !py-2 shrink-0 border-b border-white/10 dark:border-black/10 [mask-image:linear-gradient(to_right,transparent,black_12px,black_calc(100%-12px),transparent)] [-webkit-mask-image:linear-gradient(to_right,transparent,black_12px,black_calc(100%-12px),transparent)]"
-                            contentClassName="!flex-1 !h-full !min-h-0 !overflow-y-auto overflow-x-hidden w-full px-0 py-4 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent [height:100%!important]"
-                            renderFooter={({ currentStep, handleBack, handleNext, isLastStep }: any) => (
-                                <QuestionnaireFooter
-                                    currentStep={currentStep}
-                                    isLastStep={isLastStep}
-                                    answeredCount={answeredCount}
-                                    handleBack={handleBack}
-                                    handleNext={handleNext}
-                                    handleFinish={handleFinish}
-                                />
-                            )}
-                        >
-                            {questions.map((question, index) => (
-                                <Step key={index}>
-                                    <QuestionStep
-                                        question={question}
-                                        index={index}
-                                        totalQuestions={questions.length}
-                                        currentAnswer={answers[index]}
-                                        onAnswer={handleAnswer}
+                <div className="flex-1 overflow-hidden min-h-0 flex flex-col relative z-10">
+                    {mode === 'result' ? (
+                        <QuestionnaireResult
+                            isFinished={isFinished}
+                            answeredCount={answeredCount}
+                            onContinue={handleResultContinue}
+                        />
+                    ) : mode === 'intro' ? (
+                        <QuestionnaireIntro
+                            isLoggedIn={!!user}
+                            isFinished={isFinished}
+                            hasHistory={hasHistory}
+                            onStart={handleStartQuestionnaire}
+                            onSkip={handleSkip}
+                        />
+                    ) : (
+                        <div className="flex flex-col h-full w-full">
+                            {/* @ts-ignore */}
+                            <Stepper
+                                ref={stepperRef}
+                                initialStep={calculatedInitialStep}
+                                completedSteps={completedSteps}
+                                className="!h-full !flex-1 flex flex-col"
+                                onStepChange={(step: number) => console.log(step)}
+                                onFinalStepCompleted={handleFinish}
+                                stepCircleContainerClassName="!max-w-full !w-full !h-full flex flex-col flex-1 bg-transparent !shadow-none border-none border-0 m-0 !bg-transparent rounded-none"
+                                stepContainerClassName="!px-0 !py-2 shrink-0 border-b border-white/10 dark:border-black/10 [mask-image:linear-gradient(to_right,transparent,black_12px,black_calc(100%-12px),transparent)] [-webkit-mask-image:linear-gradient(to_right,transparent,black_12px,black_calc(100%-12px),transparent)]"
+                                contentClassName="!flex-1 !h-full !min-h-0 !overflow-y-auto overflow-x-hidden w-full px-0 py-4 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent [height:100%!important]"
+                                renderFooter={({ currentStep, handleBack, handleNext, isLastStep }: any) => (
+                                    <QuestionnaireFooter
+                                        currentStep={currentStep}
+                                        isLastStep={isLastStep}
+                                        answeredCount={answeredCount}
+                                        handleBack={handleBack}
+                                        handleNext={handleNext}
+                                        handleFinish={handleFinish}
                                     />
-                                </Step>
-                            ))}
-                        </Stepper>
-                    </div>
-                )}
+                                )}
+                            >
+                                {questions.map((question, index) => (
+                                    <Step key={index}>
+                                        <QuestionStep
+                                            question={question}
+                                            index={index}
+                                            totalQuestions={questions.length}
+                                            currentAnswer={answers[index]}
+                                            onAnswer={handleAnswer}
+                                        />
+                                    </Step>
+                                ))}
+                            </Stepper>
+                        </div>
+                    )}
+                </div>
             </div>
         </SidebarLayout>
     );
