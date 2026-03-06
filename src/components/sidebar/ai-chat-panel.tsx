@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { getQuestions } from './questionnaire/questions-data';
-import { Send, Loader2, Info, BotMessageSquare, Settings2, Lock, Check } from 'lucide-react';
+import { Send, Loader2, Info, BotMessageSquare, Settings2, Lock, Check, Trash2, X } from 'lucide-react';
 import { useLanguage } from '@/components/providers/language-provider';
 import { useAuth } from '@/components/providers/auth-provider';
 import { SidebarLayout } from './sidebar-layout';
@@ -56,7 +56,6 @@ function buildPOISummary(features: any[], label: string, refLat?: number, refLng
             distStr = ` (${formatDist(haversineKm(refLat, refLng, coords[0], coords[1]))})`;
         }
 
-        // Google Places returns a single `address` field; OSM uses addr:street etc.
         const addr = props.address
             ? ` — ${props.address}`
             : (() => {
@@ -72,7 +71,6 @@ function buildPOISummary(features: any[], label: string, refLat?: number, refLng
 }
 
 function renderInline(text: string): React.ReactNode[] {
-    // Split by **bold** first, then handle [label](url) links inside each segment
     const boldSegments = text.split(/\*\*/);
     const result: React.ReactNode[] = [];
 
@@ -81,7 +79,6 @@ function renderInline(text: string): React.ReactNode[] {
             result.push(<strong key={`b${boldIdx}`}>{seg}</strong>);
             return;
         }
-        // Parse [label](url) links inside plain segments
         const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g;
         let last = 0;
         let m: RegExpExecArray | null;
@@ -114,15 +111,6 @@ function renderMarkdown(text: string): React.ReactNode {
     });
 }
 
-function extract_json(text: string): any {
-    try { return JSON.parse(text.trim()); } catch { }
-    const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (fence) { try { return JSON.parse(fence[1].trim()); } catch { } }
-    const obj = text.match(/\{[\s\S]*\}/);
-    if (obj) { try { return JSON.parse(obj[0]); } catch { } }
-    return null;
-}
-
 const SYSTEM_PROMPT =
     'Jsi inteligentní asistent pro analýzu míst a lokalit v České republice. ' +
     'Pokud ti jsou poskytnuta geodata z databáze, využij je ve své odpovědi – uveď konkrétní místa, názvy obcí nebo zařízení. ' +
@@ -139,6 +127,7 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
     const [thinkingSteps, setThinkingSteps] = useState<ThinkingStep[]>([]);
     const [contextNote, setContextNote] = useState<string | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const abortControllerRef = useRef<AbortController | null>(null);
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -183,6 +172,24 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
         window.addEventListener('clear-ai-history', handleClearHistory);
         return () => window.removeEventListener('clear-ai-history', handleClearHistory);
     }, []);
+
+    const clearHistory = () => {
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+            abortControllerRef.current = null;
+        }
+        setMessages([]);
+        setIsLoading(false);
+        setThinkingSteps([]);
+        setContextNote(null);
+    };
+
+    const cancelRequest = () => {
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+            abortControllerRef.current = null;
+        }
+    };
 
     const build_API_messages = (conversation_history: Message[]) => {
         const api_messages: { role: string; content: string }[] = [
@@ -237,7 +244,6 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
         const userMessage = input.trim();
         setInput('');
 
-        // Reset map layers on every new prompt
         window.dispatchEvent(new CustomEvent('ai-map-reset'));
 
         const updatedMessages: Message[] = [...messages, { role: 'user', content: userMessage }];
@@ -249,105 +255,49 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
         }]);
 
         try {
-            let geoContext = '';
-
-            if (aiModel !== 'gemini') {
-                let selectedFiles: string[] = [];
-
-                try {
-                    const indexRes = await fetch('/api/geojson-index');
-                    if (indexRes.ok) {
-                        const { files: geoFiles } = await indexRes.json();
-
-                        const fileListStr = (geoFiles as { path: string }[])
-                            .slice(0, 150)
-                            .map(f => f.path)
-                            .join('\n');
-
-                        const selectionMessages = [
-                            {
-                                role: 'system',
-                                content:
-                                    'Odpovídej POUZE validním JSON objektem bez markdownu, uvozovek nebo jiného textu kolem.',
-                            },
-                            {
-                                role: 'user',
-                                content:
-                                    `Dotaz uživatele: "${userMessage}"\n\n` +
-                                    `Dostupné GeoJSON soubory (každý reprezentuje určitý typ geodat):\n${fileListStr}\n\n` +
-                                    `Vyber 0–5 souborů, které mohou být relevantní pro zodpovězení dotazu. ` +
-                                    `Vrať JSON ve formátu: {"selectedFiles": ["relativni/cesta.geojson"]}`,
-                            },
-                        ];
-
-                        const selRes = await fetch('/api/chat', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ messages: selectionMessages, model: aiModel }),
-                        });
-
-                        if (selRes.ok) {
-                            const selData = await selRes.json();
-                            const parsed = extract_json(selData.reply || '');
-                            if (parsed) {
-                                selectedFiles = Array.isArray(parsed.selectedFiles)
-                                    ? (parsed.selectedFiles as string[]).slice(0, 5)
-                                    : [];
-                            }
-                        }
-                    }
-                } catch {
-                    // Ignore please
-                }
-
-                if (selectedFiles.length > 0) {
-                    advanceStep(language === 'cs' ? 'Prohledávám databázi lokalit...' : 'Searching location database...');
-
-                    try {
-                        const searchRes = await fetch('/api/geojson-search', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ filePaths: selectedFiles }),
-                        });
-
-                        if (searchRes.ok) {
-                            const { features } = await searchRes.json();
-                            if (Array.isArray(features) && features.length > 0) {
-                                geoContext =
-                                    `Relevantní geodata nalezená v databázi:\n` +
-                                    JSON.stringify(features.slice(0, 15), null, 2);
-                            }
-                        }
-                    } catch {
-                        // Ignore please
-                    }
-                }
-            }
-
-            advanceStep(language === 'cs' ? 'Formuluji odpověď...' : 'Formulating response...',);
+            abortControllerRef.current = new AbortController();
 
             const apiMessages = build_API_messages(updatedMessages);
-
-            if (geoContext) {
-                apiMessages.splice(1, 0, { role: 'system', content: geoContext });
-            }
+            advanceStep(language === 'cs' ? 'Zpracovávám dotaz...' : 'Processing query...');
 
             const finalRes = await fetch('/api/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ messages: apiMessages, model: aiModel }),
+                signal: abortControllerRef.current.signal,
             });
 
-            if (!finalRes.ok) throw new Error('Network error');
+            if (!finalRes.ok) {
+                const errData = await finalRes.json().catch(() => ({}));
+                throw new Error(errData.error || `Server error: ${finalRes.status}`);
+            }
 
             const finalData = await finalRes.json();
             console.log('[AI] pois:', JSON.stringify(finalData.pois), '| location:', JSON.stringify(finalData.location));
+
+            if (finalData._debug && !finalData._debug.isConversational) {
+                const dbg = finalData._debug;
+                if (dbg.keywords?.length > 0) {
+                    advanceStep(
+                        language === 'cs'
+                            ? `Klíčová slova: ${dbg.keywords.join(', ')}`
+                            : `Keywords: ${dbg.keywords.join(', ')}`
+                    );
+                }
+                if (dbg.searchResultFiles?.length > 0) {
+                    const matchInfo = dbg.searchResultFiles.map((r: any) => `${r.file} (${r.matches}×)`).join(', ');
+                    advanceStep(
+                        language === 'cs'
+                            ? `Nalezeno v: ${matchInfo}`
+                            : `Found in: ${matchInfo}`
+                    );
+                }
+            }
 
             let mergedPois: any = null;
             let poisSummary: string | null = null;
             const poisToFetch = Array.isArray(finalData.pois) ? finalData.pois : (finalData.pois ? [finalData.pois] : []);
 
-            // Gemini two-step: backend already fetched Places and returns pre-built GeoJSON
             if (finalData.poiGeojson?.features?.length > 0) {
                 mergedPois = finalData.poiGeojson;
                 const firstFeat = mergedPois.features[0];
@@ -362,9 +312,8 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
             } else if (poisToFetch.length > 0) {
                 advanceStep(language === 'cs' ? 'Vyhledávám místa na mapě...' : 'Searching for places on map...');
                 const allFetchedFeatures: any[] = [];
-                let firstLat, firstLng, firstLabel;
+                let firstLat: number | undefined, firstLng: number | undefined, firstLabel: string | undefined;
 
-                // Non-Gemini models use Overpass (OSM); Gemini fallback uses /api/places
                 const poisEndpoint = aiModel === 'gemini' ? '/api/places' : '/api/overpass';
 
                 for (const poiReq of poisToFetch) {
@@ -410,7 +359,6 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
                 }
             }
 
-            // Fetch location polygon and show on map
             const locationsToFetch = Array.isArray(finalData.location) ? finalData.location : (finalData.location ? [finalData.location] : []);
 
             if (locationsToFetch.length > 0) {
@@ -442,9 +390,7 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
                 }
             }
 
-            // Build trace line from searchMeta (Gemini) or from POI summary (other models)
             let traceLine: string | null = null;
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const searchMeta: { label: string; count: number; found: boolean }[] | null = finalData.searchMeta ?? null;
             if (searchMeta && searchMeta.length > 0) {
                 const parts = searchMeta.map(m =>
@@ -455,7 +401,6 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
                 traceLine = poisSummary;
             }
 
-            // Show AI reply; for Gemini the reply already incorporates place results (two-step backend)
             setMessages(prev => {
                 const next = [
                     ...prev,
@@ -464,26 +409,27 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
                         content: finalData.reply || (language === 'cs' ? 'Chyba: prázdná odpověď.' : 'Error: empty response.'),
                     },
                 ];
-                // Only show separate POI summary for non-Gemini models (Gemini integrates it in its reply)
                 if (poisSummary && aiModel !== 'gemini') next.push({ role: 'assistant', content: poisSummary });
-                // Append trace line as system message so user can see what was searched
                 if (traceLine && aiModel === 'gemini') next.push({ role: 'system', content: traceLine });
                 return next;
             });
-        } catch (error) {
-            console.error(error);
-            setMessages(prev => [
-                ...prev,
-                {
-                    role: 'system',
-                    content: language === 'cs'
-                        ? 'Chyba při komunikaci s AI.'
-                        : 'Error communicating with AI.',
-                },
-            ]);
+        } catch (error: any) {
+            if (error.name === 'AbortError') {
+                // Request cancelled - don't show error
+            } else {
+                console.error(error);
+                setMessages(prev => [
+                    ...prev,
+                    {
+                        role: 'system',
+                        content: error.message || (language === 'cs' ? 'Chyba při komunikaci s AI.' : 'Error communicating with AI.'),
+                    },
+                ]);
+            }
         } finally {
             setIsLoading(false);
             setThinkingSteps([]);
+            abortControllerRef.current = null;
         }
     };
 
@@ -497,6 +443,8 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
             <Settings2 size={isCollapsed ? 20 : 18} />
         </button>
     );
+
+    const userMessageCount = messages.filter(m => m.role === 'user').length;
 
     return (
         <SidebarLayout
@@ -517,11 +465,31 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
                         {language === 'cs' ? 'ZIJE!SE AI' : 'ZIJE!SE AI'}
                     </h1>
                 </div>
-                <p className="text-xs text-gray-400 dark:text-gray-500 mb-4 px-2">
+                <p className="text-xs text-gray-400 dark:text-gray-500 mb-3 px-2">
                     {language === 'cs'
                         ? 'Inteligentní asistent pro analýzu míst a lokalit'
                         : 'Intelligent assistant for analyzing places and locations'}
                 </p>
+
+                {/* Clear button + message count */}
+                <div className="flex items-center justify-between px-1 mb-2">
+                    <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                        {userMessageCount > 0
+                            ? `${userMessageCount} ${language === 'cs' ? 'zpráv' : 'messages'}`
+                            : ''}
+                    </span>
+                    {messages.length > 0 && (
+                        <button
+                            onClick={clearHistory}
+                            className="flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200"
+                            title={language === 'cs' ? 'Vymazat historii' : 'Clear history'}
+                        >
+                            <Trash2 className="w-3 h-3" />
+                            {language === 'cs' ? 'Vymazat' : 'Clear'}
+                        </button>
+                    )}
+                </div>
+
                 <div className="h-px w-full bg-white/10 dark:bg-black/10"></div>
             </div>
 
@@ -605,6 +573,17 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
 
                 <div ref={messagesEndRef} />
             </div>
+
+            {/* Cancel button when loading */}
+            {isLoading && (
+                <button
+                    onClick={cancelRequest}
+                    className="flex items-center gap-1.5 mx-auto my-2 px-3 py-1 rounded-full text-xs text-gray-400 hover:text-gray-200 bg-white/5 hover:bg-white/10 transition-colors shrink-0 relative z-10"
+                >
+                    <X className="w-3 h-3" />
+                    {language === 'cs' ? 'Zrušit' : 'Cancel'}
+                </button>
+            )}
 
             {/* Input area */}
             <div className="relative z-10 shrink-0 mt-3 mb-2 group" data-tour="ai-chat-input">
