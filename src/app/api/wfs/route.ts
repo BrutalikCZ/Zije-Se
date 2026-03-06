@@ -31,6 +31,14 @@ function buildGetFeatureUrl(
     return url.toString();
 }
 
+function cleanTitle(title: string): string {
+    // 1. Take only text before the first parenthesis
+    let cleaned = title.split('(')[0].trim();
+    // 2. Replace any sequence of underscores with a single space
+    cleaned = cleaned.replace(/_+/g, ' ');
+    return cleaned.trim();
+}
+
 function parseCapabilities(xml: string): { name: string; title: string }[] {
     const layers: { name: string; title: string }[] = [];
     const ftRegex = /<(?:[\w]+:)?FeatureType[\s>]([\s\S]*?)<\/(?:[\w]+:)?FeatureType>/g;
@@ -40,9 +48,10 @@ function parseCapabilities(xml: string): { name: string; title: string }[] {
         const nameMatch = block.match(/<(?:[\w]+:)?Name[^>]*>([^<]+)<\/(?:[\w]+:)?Name>/);
         const titleMatch = block.match(/<(?:[\w]+:)?Title[^>]*>([^<]+)<\/(?:[\w]+:)?Title>/);
         if (nameMatch) {
+            const rawTitle = titleMatch ? titleMatch[1].trim() : nameMatch[1].trim();
             layers.push({
                 name: nameMatch[1].trim(),
-                title: titleMatch ? titleMatch[1].trim() : nameMatch[1].trim(),
+                title: cleanTitle(rawTitle),
             });
         }
     }

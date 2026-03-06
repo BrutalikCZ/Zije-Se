@@ -38,7 +38,7 @@ function FileTreeNode({ node, level = 0, activeLayers, toggleLayer, insideTree =
                 >
                     <div className="flex items-center gap-2 flex-1 min-w-0">
                         <span className="flex-1 text-left truncate">
-                            {node.name.replace('.geojson', '')}
+                            {node.name.replace('.geojson', '').split('(')[0].replace(/_+/g, ' ').trim()}
                         </span>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0 ml-2">
@@ -85,7 +85,7 @@ function FileTreeNode({ node, level = 0, activeLayers, toggleLayer, insideTree =
                 </div>
             )}
             <span className={`text-[13px] font-medium truncate opacity-70 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all w-full flex-1 ${isProperty && isActive ? 'text-[#3388ff]' : ''}`} title={node.name}>
-                {node.name.replace(/_/g, ' ')}
+                {node.name.split('(')[0].replace(/_+/g, ' ').trim()}
             </span>
         </label>
     );
