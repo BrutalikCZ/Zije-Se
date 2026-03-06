@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 
-const OLLAMA_URL = "http://localhost:11434/api/chat";
-const DEFAULT_MODEL = "gemma3:27b";
+const OLLAMA_URL = process.env.OLLAMA_URL || "http://localhost:11434/api/chat";
+const DEFAULT_MODEL = process.env.DEFAULT_MODEL || "gemma3:27b";
 const OLLAMA_TIMEOUT_MS = 10 * 60 * 1000;
 
 interface ChatMessage {
@@ -15,16 +15,6 @@ interface ChatRequest {
     messages: ChatMessage[];
     model?: string;
     includeGeoData?: boolean;
-}
-
-function getGeoJsonDir(): string {
-    return path.join(process.cwd(), 'public', 'data');
-}
-
-function listGeoJsonFiles(): string[] {
-    const dir = getGeoJsonDir();
-    if (!fs.existsSync(dir)) return [];
-    return fs.readdirSync(dir).filter(f => f.endsWith('.geojson'));
 }
 
 interface ExtractionResult {
@@ -41,9 +31,32 @@ interface SearchResult {
     matchedProperties: string[];
 }
 
-function searchGeoJsonFile(filename: string, keywords: string[]): SearchResult | null {
+function getGeoJsonDir(): string {
+    return path.join(process.cwd(), 'public', 'data');
+}
+
+function listGeoJsonFiles(dir?: string, prefix?: string): string[] {
+    const root = dir || getGeoJsonDir();
+    const pfx = prefix || '';
+    if (!fs.existsSync(root)) return [];
+
+    const results: string[] = [];
+    for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+        const relPath = pfx ? `${pfx}/${entry.name}` : entry.name;
+        if (entry.isDirectory()) {
+            results.push(...listGeoJsonFiles(path.join(root, entry.name), relPath));
+        } else if (entry.name.endsWith('.geojson')) {
+            results.push(relPath);
+        }
+    }
+    return results;
+}
+
+function searchGeoJsonFile(relPath: string, keywords: string[]): SearchResult | null {
     try {
-        const filePath = path.join(getGeoJsonDir(), filename);
+        const filePath = path.join(getGeoJsonDir(), relPath);
+        if (!fs.existsSync(filePath)) return null;
+
         const raw = fs.readFileSync(filePath, 'utf-8');
         const geo = JSON.parse(raw);
 
@@ -81,57 +94,78 @@ function searchGeoJsonFile(filename: string, keywords: string[]): SearchResult |
         if (matchedFeatures.length === 0) return null;
 
         return {
-            file: filename,
+            file: relPath,
             matchedFeatures: matchedFeatures.length,
             totalFeatures: geo.features.length,
             samples: matchedFeatures.slice(0, 10),
             matchedProperties: [...matchedPropertyKeys],
         };
     } catch (err: any) {
-        console.warn(`[Search] Error reading ${filename}:`, err.message);
+        console.warn(`[Search] Error reading ${relPath}:`, err.message);
         return null;
     }
 }
 
-const EXTRACTION_SYSTEM_PROMPT = `Jsi extraktor klicovych slov. Uzivatel hleda bydleni v Ceske republice.
+function serverSideSearch(keywords: string[], selectedFiles: string[], allFiles: string[]): SearchResult[] {
+    if (keywords.length === 0) return [];
 
-Tvuj ukol:
-1. Extrahuj klicova slova z dotazu uzivatele (typ nemovitosti, pozadavky, lokalita, apod.)
-2. Podivej se na seznam dostupnych GeoJSON souboru a vyber 0-5 souboru, ktere mohou byt relevantni pro zodpovezeni dotazu. Vybirej podle nazvu souboru.
-3. Urcit, zda je dotaz konverzacni (pozdrav, otazka na funkce) nebo analyticky (hleda konkretni data).
+    const filesToSearch = selectedFiles.length > 0 ? selectedFiles : allFiles;
+    console.log(`[AI Search] Searching ${filesToSearch.length} files for: [${keywords.join(', ')}]`);
 
-Odpovez POUZE validnim JSON objektem, nic jineho:
+    const results: SearchResult[] = [];
+    for (const filename of filesToSearch) {
+        const result = searchGeoJsonFile(filename, keywords);
+        if (result) {
+            results.push(result);
+            console.log(`[AI Search]   ${filename}: ${result.matchedFeatures} matches`);
+        }
+    }
+    return results;
+}
+
+function buildGeoSearchContext(searchResults: SearchResult[]): string {
+    if (searchResults.length === 0) {
+        return 'Nebyly nalezeny žádné relevantní záznamy v GeoJSON databázi.';
+    }
+
+    const parts = searchResults.map(r => {
+        const samplesStr = r.samples
+            .map((s, i) => `    ${i + 1}. ${JSON.stringify(s)}`)
+            .join('\n');
+        return [
+            `Soubor: ${r.file}`,
+            `  Nalezeno: ${r.matchedFeatures} z ${r.totalFeatures} záznamů`,
+            `  Klíčové vlastnosti: ${r.matchedProperties.join(', ')}`,
+            `  Ukázky (max 10):`,
+            samplesStr,
+        ].join('\n');
+    });
+
+    return `Výsledky vyhledávání v GeoJSON databázi:\n\n${parts.join('\n\n')}`;
+}
+
+const EXTRACTION_SYSTEM_PROMPT = `Jsi extraktor klíčových slov. Uživatel hledá bydlení v České republice.
+
+Tvůj úkol:
+1. Extrahuj klíčová slova z dotazu uživatele (typ nemovitosti, požadavky, lokalita, apod.)
+2. Podívej se na seznam dostupných GeoJSON souborů a vyber 0–5 souborů, které mohou být relevantní. Vybírej podle názvu souboru a cesty.
+3. Urči, zda je dotaz konverzační (pozdrav, otázka na funkce) nebo analytický (hledá konkrétní data).
+
+Odpověz POUZE validním JSON objektem, nic jiného:
 {
-  "keywords": ["klicove", "slovo", "dalsi"],
-  "selectedFiles": ["soubor1.geojson", "soubor2.geojson"],
+  "keywords": ["klíčové", "slovo", "další"],
+  "selectedFiles": ["cesta/soubor1.geojson", "cesta/soubor2.geojson"],
   "isConversational": false
 }
 
-Pokud je dotaz konverzacni (pozdrav, diky, jak to funguje apod.), vrat:
+Pokud je dotaz konverzační (pozdrav, díky, jak to funguje apod.), vrať:
 {
   "keywords": [],
   "selectedFiles": [],
   "isConversational": true
 }`;
 
-async function ollamaStepExtract(
-    userMessage: string,
-    availableFiles: string[],
-    model: string
-): Promise<ExtractionResult> {
-    const fileList = availableFiles.length > 0
-        ? `Dostupne GeoJSON soubory (kazdy reprezentuje urcity typ geodat):\n${availableFiles.map(f => `- ${f}`).join('\n')}`
-        : 'Zadne GeoJSON soubory nejsou dostupne.';
-
-    const messages: ChatMessage[] = [
-        { role: 'system', content: EXTRACTION_SYSTEM_PROMPT },
-        { role: 'user', content: `${fileList}\n\nDotaz uzivatele: "${userMessage}"` },
-    ];
-
-    console.log('[AI Step 1] Extracting keywords...');
-    const raw = await call_ollama(messages, model);
-    console.log('[AI Step 1] Raw:', raw.slice(0, 500));
-
+function parseExtractionResult(raw: string): ExtractionResult {
     try {
         const cleaned = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
         const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
@@ -143,66 +177,46 @@ async function ollamaStepExtract(
             isConversational: !!parsed.isConversational,
         };
     } catch (err) {
-        console.warn('[AI Step 1] Parse failed, assuming conversational:', err);
+        console.warn('[AI] Extraction parse failed, assuming conversational:', err);
         return { keywords: [], selectedFiles: [], isConversational: true };
     }
 }
 
-function ollamaStepSearch(keywords: string[], selectedFiles: string[], allFiles: string[]): SearchResult[] {
-    if (keywords.length === 0) return [];
+async function llmStepExtract(userMessage: string, availableFiles: string[], callLLM: (messages: ChatMessage[]) => Promise<string>): Promise<ExtractionResult> {
+    const fileList = availableFiles.length > 0
+        ? `Dostupné GeoJSON soubory:\n${availableFiles.map(f => `- ${f}`).join('\n')}`
+        : 'Žádné GeoJSON soubory nejsou dostupné.';
 
-    const filesToSearch = selectedFiles.length > 0 ? selectedFiles : allFiles;
-    console.log(`[AI Step 2] Searching ${filesToSearch.length} files for: [${keywords.join(', ')}]`);
+    const messages: ChatMessage[] = [
+        { role: 'system', content: EXTRACTION_SYSTEM_PROMPT },
+        { role: 'user', content: `${fileList}\n\nDotaz uživatele: "${userMessage}"` },
+    ];
 
-    const results: SearchResult[] = [];
-    for (const filename of filesToSearch) {
-        const result = searchGeoJsonFile(filename, keywords);
-        if (result) {
-            results.push(result);
-            console.log(`[AI Step 2]   ${filename}: ${result.matchedFeatures} matches`);
-        }
-    }
-    return results;
+    console.log('[AI Step 1] Extracting keywords...');
+    const raw = await callLLM(messages);
+    console.log('[AI Step 1] Raw:', raw.slice(0, 500));
+
+    return parseExtractionResult(raw);
 }
 
-function buildOllamaResponsePrompt(searchResults: SearchResult[], extraction: ExtractionResult, geoContext: string): string {
-    let dataSection: string;
+function buildOllamaResponsePrompt(searchResults: SearchResult[], extraction: ExtractionResult): string {
+    const dataSection = buildGeoSearchContext(searchResults);
 
-    if (searchResults.length === 0) {
-        dataSection = 'Nebyly nalezeny zadne relevantni zaznamy v GeoJSON datech.';
-    } else {
-        const parts = searchResults.map(r => {
-            const samplesStr = r.samples
-                .map((s, i) => `    ${i + 1}. ${JSON.stringify(s)}`)
-                .join('\n');
-            return [
-                `Soubor: ${r.file}`,
-                `  Nalezeno: ${r.matchedFeatures} z ${r.totalFeatures} zaznamu`,
-                `  Klicove vlastnosti: ${r.matchedProperties.join(', ')}`,
-                `  Ukazky (max 10):`,
-                samplesStr,
-            ].join('\n');
-        });
-        dataSection = parts.join('\n\n');
-    }
+    return `Jsi inteligentní asistent platformy ZIJE!SE — pomáháš uživatelům najít ideální místo k bydlení v České republice.
 
-    return `Jsi inteligentni asistent platformy ZIJE!SE — pomahas uzivatelum najit idealni misto k bydleni v Ceske republice.
+## Kontext analýzy
 
-## Kontext analyzy
+Extrahovaná klíčová slova: ${extraction.keywords.join(', ') || '(žádná)'}
+Prohledané soubory: ${extraction.selectedFiles.join(', ') || '(žádné)'}
 
-Extrahovana klicova slova: ${extraction.keywords.join(', ') || '(zadna)'}
-Prohledane soubory: ${extraction.selectedFiles.join(', ') || '(zadne)'}
+## ${dataSection}
 
-## Vysledky vyhledavani v GeoJSON datech
+## PŘÍKAZY PRO MAPU (používej je VŽDY když uživatel hledá nějaké místo)
 
-${dataSection}
+Když uživatel chce najít místo určitého typu, VŽDY přidej blok json:pois.
+Použij souřadnice z kontextu dlaždice nebo ze zprávy uživatele.
 
-## PRIKAZY PRO MAPU (pouzivej je VZDY kdyz uzivatel hleda nejake misto)
-
-Kdyz uzivatel chce najit misto urciteho typu, VZDY pridej blok json:pois.
-Pouzij souradnice z kontextu dlazdice nebo ze zpravy uzivatele.
-
-ZKRATKOVE KLICE:
+ZKRATKOVÉ KLÍČE:
   amenity: pharmacy, hospital, doctors, dentist, school, kindergarten, university, library,
            bank, atm, post_office, police, fire_station, fuel, charging_station,
            restaurant, cafe, fast_food, bar, pub, cinema, theatre, townhall, courthouse,
@@ -213,54 +227,227 @@ ZKRATKOVE KLICE:
   leisure: park, playground, sports_centre, swimming_pool, fitness_centre, stadium,
            nature_reserve, garden
 
-Priklad — lekarna u souradnic (radius default 1000m, min 10, max 5000):
+FILTROVÁNÍ ŠKOL:
+  ZŠ: amenity=school + "nameFilter": "ZŠ|Základní škola|základní škola"
+  SŠ: amenity=school + "nameFilter": "SŠ|SPŠ|SOŠ|SOU|Gymnázium|gymnázium|Střední škola"
+  ZUŠ: amenity=school + "nameFilter": "ZUŠ|Základní umělecká"
+  VŠ: amenity=university
+  MŠ: amenity=kindergarten
+
+GENERICKÉ TAGY:
+  obecní úřad: "tag": ["amenity=townhall", "office=government"]
+  soud: "tag": "amenity=courthouse"
+  muzeum: "tag": "tourism=museum"
+  pošta: "tag": "amenity=post_office"
+
+Příklad:
 \`\`\`json:pois
 {
   "amenity": "pharmacy",
   "lat": 50.0477,
   "lng": 15.7583,
   "radius": 1000,
-  "label": "Lekarny v okoli"
+  "label": "Lékárny v okolí"
 }
 \`\`\`
 
-Kdyz uzivatel chce ZOBRAZIT konkretni mesto nebo oblast jako plochu na mape:
+Zobrazení města/oblasti:
 \`\`\`json:location
 {
-  "place": "Praha 6, Ceska republika",
+  "place": "Praha 6, Česká republika",
   "label": "Praha 6"
 }
 \`\`\`
 
-Pokud jsi nasel relevantni GeoJSON data, vrat filtrovaci parametry:
+GeoJSON filtr:
 \`\`\`json:filters
 {
-  "dataset": "nazev_souboru.geojson",
-  "filters": {
-    "property_name": "hodnota"
-  }
+  "dataset": "soubor.geojson",
+  "filters": { "property": "hodnota" }
 }
 \`\`\`
 
 ## Instrukce
-1. Na zaklade vysledku vyhledavani odpovez uzivateli srozumitelne a CESKY.
-2. Pokud data neodpovidaji dotazu, rekni to uprimne a doporuc preformulaci.
-3. Navazuj na predchozi konverzaci.
-4. Bud strucny — max 2-3 odstavce.
-5. NIKDY nevymyslej webove adresy (URL). Pokud si nejsi jisty, nepis ji.
-6. NIKDY nepouzivej placeholder text jako "[nazev mesta]".`;
+1. Odpovídej srozumitelně a ČESKY.
+2. Pokud data neodpovídají, řekni to upřímně.
+3. Navazuj na předchozí konverzaci.
+4. Buď stručný — max 2-3 odstavce.
+5. NIKDY nevymýšlej URL.
+6. NIKDY nepoužívej placeholder text.`;
 }
 
-const CONVERSATIONAL_PROMPT = `Jsi inteligentni asistent platformy ZIJE!SE. Pomahas uzivatelum najit idealni misto k bydleni v Ceske republice.
+const CONVERSATIONAL_PROMPT = `Jsi inteligentní asistent platformy ZIJE!SE. Pomáháš uživatelům najít ideální místo k bydlení v České republice.
 
 Pravidla:
-- Odpovidej cesky, pokud uzivatel nepise anglicky.
-- Bud pratelsky a strucny.
-- Pokud se uzivatel pta na funkce, vysvetli mu ze muze:
-  1. Zadat pozadavky na bydleni (napr. "Chci byt s balkonem v Praze")
-  2. AI extrahuje klicova slova a prohleda GeoJSON datasety
-  3. Nalezene vysledky se zobrazi na mape
-- Navazuj na predchozi konverzaci.`;
+- Odpovídej česky, pokud uživatel nepíše anglicky.
+- Buď přátelský a stručný.
+- Pokud se uživatel ptá na funkce, vysvětli mu že může:
+  1. Zadat požadavky na bydlení (např. "Chci byt s balkonem v Praze")
+  2. AI extrahuje klíčová slova a prohledá GeoJSON datasety + Google Places
+  3. Nalezené výsledky se zobrazí na mapě
+- Navazuj na předchozí konverzaci.`;
+
+function buildGeminiFinalPrompt(geoSearchContext: string, placesContext: string | null, extraction: ExtractionResult, anyPlacesFound: boolean,): string {
+    return `Jsi "ZIJE!SE AI" — přátelský, empatický a vysoce praktický asistent pro lidi, kteří hledají bydlení v České republice.
+
+# TVŮJ POSTUP (dodržuj přesně):
+
+## 1. SHRNUTÍ DAT
+Máš k dispozici tato data:
+
+### Extrahovaná klíčová slova: ${extraction.keywords.join(', ') || '(žádná)'}
+### Prohledané soubory: ${extraction.selectedFiles.join(', ') || '(žádné)'}
+
+### Výsledky z GeoJSON databáze:
+${geoSearchContext}
+
+${placesContext ? `### Výsledky z Google Places:\n${placesContext}` : '### Google Places: nebylo vyhledáváno.'}
+
+## 2. VYHODNOCENÍ PŘESNOSTI
+Zhodnoť, jak přesně nalezená data odpovídají požadavku uživatele:
+- Pokud data pokrývají požadavek dobře, uveď to.
+- Pokud data jsou jen částečně relevantní, řekni co chybí.
+- Pokud data neodpovídají, buď upřímný a doporuč přeformulaci.
+
+## 3. ODPOVĚĎ
+Na základě shrnutí a vyhodnocení odpověz uživateli srozumitelně a ČESKY.
+${anyPlacesFound
+        ? 'Pokud byla nalezena místa z Google Places, zmiň jejich konkrétní názvy, adresy a kontakty.'
+        : ''}
+
+# MAPOVÉ PŘÍKAZY
+
+${anyPlacesFound
+        ? 'NEPŘIDÁVEJ json:pois bloky — místa z Google Places jsou již zpracována a zobrazena na mapě.'
+        : `Pokud je potřeba vyhledat místa na mapě, přidej json:pois blok.`}
+
+MUSÍŠ přidat json:location blok pro každé konkrétní město nebo oblast, o které mluvíš:
+\`\`\`json:location
+{
+  "place": "Název, Česká republika",
+  "label": "Krátký popis"
+}
+\`\`\`
+
+${!anyPlacesFound ? `
+Pokud uživatel hledá místa určitého typu, přidej json:pois blok:
+\`\`\`json:pois
+{
+  "type": "Google Places typ",
+  "keyword": "textový dotaz",
+  "placeName": "Město, Česká republika",
+  "label": "Popis"
+}
+\`\`\`
+
+Google Places typy: pharmacy, hospital, doctor, dentist, primary_school, secondary_school, preschool, university, restaurant, cafe, bar, bakery, supermarket, convenience_store, park, playground, sports_complex, swimming_pool, fitness_center, bank, atm, post_office, police, fire_station, parking, veterinary_care, gas_station, car_repair, hotel, city_hall, courthouse, museum, movie_theater, library
+
+Školy: ZŠ=primary_school+keyword:"základní škola ZŠ", SŠ=secondary_school+keyword:"střední škola gymnázium", MŠ=keyword:"mateřská škola MŠ školka", VŠ=university
+` : ''}
+
+Pokud jsi našel relevantní GeoJSON data, vrať filtr:
+\`\`\`json:filters
+{
+  "dataset": "soubor.geojson",
+  "filters": { "property": "hodnota" }
+}
+\`\`\`
+
+# PRAVIDLA
+- Odpovídej ČESKY.
+- Buď stručný ale informativní.
+- NIKDY nevymýšlej URL — použij Google vyhledávání: [Hledat](https://www.google.com/search?q=...)
+- NIKDY nepoužívej placeholder text jako "[název]".
+- NEVYMÝŠLEJ SI CENY — uváděj jako "odhad".
+- Navazuj na předchozí konverzaci.`;
+}
+
+const GEMINI_EXTRACTION_PROMPT = `Jsi extraktor klíčových slov a příkazů pro mapovou aplikaci. Uživatel hledá bydlení v České republice.
+
+Tvůj úkol:
+1. Extrahuj klíčová slova z dotazu (typ nemovitosti, požadavky, lokalita, atd.)
+2. Ze seznamu GeoJSON souborů vyber 0–5 relevantních podle názvu/cesty.
+3. Urči, zda je dotaz konverzační nebo analytický.
+4. Pokud uživatel hledá konkrétní typ místa, vygeneruj json:pois blok.
+
+Odpověz takto — NEJDŘÍVE JSON blok, pak volitelně mapové příkazy:
+
+\`\`\`json:extraction
+{
+  "keywords": ["klíčové", "slovo"],
+  "selectedFiles": ["cesta/soubor.geojson"],
+  "isConversational": false
+}
+\`\`\`
+
+Pokud uživatel hledá místa, PŘIDEJ json:pois blok (Google Places typy):
+\`\`\`json:pois
+{
+  "type": "pharmacy",
+  "placeName": "Pardubice, Česká republika",
+  "label": "Lékárny v Pardubicích"
+}
+\`\`\`
+
+Pokud je dotaz konverzační:
+\`\`\`json:extraction
+{
+  "keywords": [],
+  "selectedFiles": [],
+  "isConversational": true
+}
+\`\`\`
+
+Google Places typy: pharmacy, hospital, doctor, dentist, primary_school, secondary_school, preschool, university, restaurant, cafe, bar, bakery, supermarket, convenience_store, park, playground, sports_complex, swimming_pool, fitness_center, bank, atm, post_office, police, fire_station, parking, veterinary_care, gas_station, car_repair, hotel, city_hall, courthouse, museum, movie_theater, library
+
+Školy: ZŠ→type=primary_school+keyword:"základní škola ZŠ", SŠ→type=secondary_school+keyword:"střední škola gymnázium", MŠ→keyword:"mateřská škola MŠ školka" (bez type), VŠ→type=university
+
+Poloha: použij "lat"+"lng" z kontextu NEBO "placeName" s názvem města+", Česká republika".
+Pokud použiješ "placeName", NEVKLÁDEJ "radius".
+NIKDY nevymýšlej souřadnice.`;
+
+async function geminiStepExtract(userMessage: string, availableFiles: string[], conversationMessages: ChatMessage[],): Promise<{ extraction: ExtractionResult; pois: any[] }> {
+    const fileList = availableFiles.length > 0
+        ? `Dostupné GeoJSON soubory:\n${availableFiles.map(f => `- ${f}`).join('\n')}`
+        : 'Žádné GeoJSON soubory nejsou dostupné.';
+
+    const systemContext = conversationMessages
+        .filter(m => m.role === 'system')
+        .map(m => m.content)
+        .join('\n');
+
+    const messages: ChatMessage[] = [
+        { role: 'system', content: GEMINI_EXTRACTION_PROMPT },
+    ];
+
+    if (systemContext) {
+        messages.push({ role: 'system', content: `Kontext konverzace:\n${systemContext}` });
+    }
+
+    messages.push({
+        role: 'user',
+        content: `${fileList}\n\nDotaz uživatele: "${userMessage}"`,
+    });
+
+    console.log('[AI Gemini Step 1] Extracting keywords + POIs...');
+    const raw = await call_gemini(messages);
+    console.log('[AI Gemini Step 1] Raw:', raw.slice(0, 800));
+
+    let extraction: ExtractionResult = { keywords: [], selectedFiles: [], isConversational: true };
+    const extractionMatch = raw.match(/```json:extraction\s*([\s\S]*?)```/);
+    if (extractionMatch) {
+        extraction = parseExtractionResult(extractionMatch[1]);
+    } else {
+        extraction = parseExtractionResult(raw);
+    }
+
+    const poisMatches = Array.from(raw.matchAll(/```json:pois\s*([\s\S]*?)```/g)) as any[];
+    const pois = poisMatches
+        .map(m => { try { return JSON.parse(m[1].trim()); } catch { return null; } })
+        .filter(Boolean);
+
+    return { extraction, pois };
+}
 
 async function call_ollama(messages: ChatMessage[], model: string) {
     const controller = new AbortController();
@@ -291,7 +478,7 @@ async function call_ollama(messages: ChatMessage[], model: string) {
 async function call_gemini(messages: ChatMessage[]) {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-        throw new Error('V nastavení chybí GEMINI_API_KEY enviroment proměnná. Přidejte ji do .env.local a restartujte server.');
+        throw new Error('Chybí GEMINI_API_KEY v .env.local.');
     }
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
@@ -317,7 +504,7 @@ async function call_gemini(messages: ChatMessage[]) {
         };
     }
 
-    console.log(`[AI] Calling Google Gemini API (gemini-2.5-flash)`);
+    console.log(`[AI] Calling Gemini API`);
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), OLLAMA_TIMEOUT_MS);
@@ -332,14 +519,12 @@ async function call_gemini(messages: ChatMessage[]) {
 
         if (!response.ok) {
             const errorText = await response.text().catch(() => '');
-            throw new Error(`Gemini API vrátil chybu ${response.status}: ${errorText}`);
+            throw new Error(`Gemini API ${response.status}: ${errorText}`);
         }
 
         const data = await response.json();
         const reply = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!reply) {
-            throw new Error('Gemini API nevrátilo platnou odpověď.');
-        }
+        if (!reply) throw new Error('Gemini API nevrátilo platnou odpověď.');
 
         return reply;
     } finally {
@@ -441,13 +626,13 @@ async function fetchPlacesForPoi(apiKey: string, poiReq: any): Promise<any[]> {
 }
 
 function buildPlacesContextForAI(results: { label: string; places: any[]; found: boolean }[]): string {
-    const lines: string[] = ['Výsledky vyhledávání míst z Google Places API:'];
+    const lines: string[] = [];
     for (const group of results) {
         if (!group.found) {
-            lines.push(`\n### ${group.label} — NENALEZENO (0 míst v zadaném okruhu)`);
+            lines.push(`### ${group.label} — NENALEZENO (0 míst)`);
             continue;
         }
-        lines.push(`\n### ${group.label} (nalezeno: ${group.places.length} míst)`);
+        lines.push(`### ${group.label} (${group.places.length} míst)`);
         for (const p of group.places.slice(0, 15)) {
             const parts: string[] = [`• ${p.name || 'Bez názvu'}`];
             if (p.address) parts.push(`— ${p.address}`);
@@ -460,109 +645,18 @@ function buildPlacesContextForAI(results: { label: string; places: any[]; found:
     return lines.join('\n');
 }
 
-function buildSystemPromptGemini(): string {
-    return `Jsi "ZIJE!SE AI" — přátelský, empatický a vysoce praktický asistent pro lidi, kteří hledají bydlení nebo plánují přestěhování v České republice.
-
-Tvojí misí je usnadnit lidem stresující proces stěhování a výběru lokality. Odpovídáš jasně, strukturovaně a vždy se zaměřením na reálnou využitelnost informací.
-
-# TVOJE ROLE A ZÁBĚR TÉMAT
-Pomáháš lidem se vším kolem bydlení v ČR. Zahrnuje to širokou škálu témat (neomezuj se):
-- **Lokality:** Hodnocení čtvrtí, měst a regionů, srovnání, doporučení podle priorit uživatele.
-- **Vzdělávání:** Zápisy do ZŠ/MŠ, kapacity, termíny, spádovost, SŠ a VŠ.
-- **Zdravotnictví:** Kde najít lékaře, registrace, dostupnost péče.
-- **Úřady a byrokracie:** Přihlášení k trvalému pobytu, katastr nemovitostí, stavební řízení, matrika, poplatky za odpady.
-- **Doprava:** MHD, vlaková spojení (PID, IDS atd.), dálnice, parkovací zóny, docházkové vzdálenosti.
-- **Kvalita života:** Příroda, sport, kultura, volný čas, bezpečnost, čistota ovzduší, hluk, záplavová území.
-- **Trh a sítě:** Ceny nemovitostí a nájmů (uváděj jako aktuální odhady/trendy), životní náklady, internet, pokrytí.
-- **Stěhování:** Praktické checklisty (co zařídit, v jakém pořadí, na co nezapomenout).
-
-**ZÁKLADNÍ PRAVIDLO:** Pokud má dotaz byť jen vzdálenou spojitost s výběrem lokality, bydlením, stěhováním nebo životem v novém místě — ZODPOVĚZ HO. Odmítej POUZE dotazy zcela nesouvisející (recepty, programování nesouvisející s mapou, psaní básní apod.).
-
-# TVŮJ POSTUP PŘI ODPOVÍDÁNÍ:
-1. **Analyzuj potřeby:** Zjisti, co uživatel hledá a jaké má priority (např. rodina s dětmi potřebuje školky a parky, student MHD a bary).
-2. **Buď konkrétní:** Využij znalosti českých reálií. Pokud mluvíš o úřadech, zmiň české termíny (např. "Czech POINT", "trvalý pobyt").
-3. **Formátuj přehledně:** Používej odrážky, tučné písmo pro důležité pojmy a udržuj přátelský tón. Vždy odpovídej ČESKY (pokud uživatel explicitně nežádá jiný jazyk).
-4. **Vizualizuj:** VŽDY přidej příslušné mapové bloky (json:location a/nebo json:pois), pokud mluvíš o konkrétních místech.
-
----
-
-# 🗺️ MAP INTERACTION COMMANDS (Kritické instrukce)
-
-Tvůj výstup je propojen s mapovou aplikací. Pro zobrazení míst a bodů zájmu musíš generovat speciální Markdown bloky kódu. MUSÍŠ dodržet přesnou syntaxi.
-
-## 1. json:location — ZOBRAZENÍ OBRYSU MÍSTA NEBO REGIONU
-Přidej tento blok VŽDY, když ve své odpovědi zmiňuješ, doporučuješ nebo porovnáváš konkrétní město, obec, čtvrť nebo kraj. Platí to i tehdy, když se uživatel přímo neptá na zobrazení na mapě.
-- Můžeš uvést max. 3 tyto bloky v jedné odpovědi (při porovnávání).
-- **Název musí být jednoznačný:** Vždy přidej ", Česká republika" (např. "Praha 6, Česká republika", "Řevnice, Česká republika").
-
-\`\`\`json:location
-{
-  "place": "Vinohrady, Praha, Česká republika",
-  "label": "Praha 2 - Vinohrady"
-}
-\`\`\`
-
-## 2. json:pois — VYHLEDÁVÁNÍ BODŮ ZÁJMU pomocí Google Places API
-Pokud uživatel hledá místa určitého typu, VŽDY přidej tento blok. Používáš **Google Places typy** (ne OSM tagy).
-
-### Povinná pole (jedno nebo obě):
-- Pole "type" — Google Places typ (viz seznam níže). Použij pro přesné vyhledání kategorie.
-- Pole "keyword" — textový dotaz pro vyhledání (použij pro školy s konkrétním typem, nebo kombinaci více pojmů).
-
-### Poloha — PRIORITA (dodržuj přesně v tomto pořadí):
-1. **Souřadnice v kontextu** — pokud je v systémové zprávě "Aktuální označené souřadnice" nebo "zeměpisná šířka X, zeměpisná délka Y", použij tyto hodnoty jako pole "lat" + "lng". Toto má NEJVYŠŠÍ PRIORITU.
-2. **Název města/obce v aktuální zprávě uživatele** — pokud uživatel píše "v Pardubicích", "u Brna", "v Praze 6" apod., použij pole "placeName" s tímto názvem + ", Česká republika".
-3. **Souřadnice z historické systémové zprávy** — pokud nejsou nové souřadnice, použij nejposlednější lat/lng ze souboru konverzace.
-4. **Název místa z kontextu konverzace** — použij pole "placeName" s nejposlednějším zmiňovaným místem.
-
-- Pokud použiješ "placeName", pole "radius" ZCELA VYNECH (vypočítá se automaticky).
-- **NIKDY nevymýšlej souřadnice.** Použij vždy reálné hodnoty z kontextu.
-
-### Radius:
-- Výchozí: 1000 m. Maximum: 5000 m (ani při dotazu "v okruhu 10 km" nepřekračuj 5000).
-
-### SEZNAM GOOGLE PLACES TYPŮ:
-**Zdravotnictví:** pharmacy, hospital, doctor, dentist
-**Vzdělávání:** primary_school, secondary_school, preschool, university
-**Jídlo a pití:** restaurant, cafe, bar, bakery, fast_food_restaurant
-**Obchody:** supermarket, convenience_store, clothing_store, hardware_store, furniture_store, book_store, bicycle_store, pet_store, florist
-**Volný čas:** park, playground, sports_complex, swimming_pool, fitness_center, stadium, museum, movie_theater, library
-**Služby:** bank, atm, post_office, police, fire_station, parking, veterinary_care, gas_station, electric_vehicle_charging_station, car_repair
-**Ubytování:** hotel, guest_house
-**Úřady:** city_hall, courthouse
-
-### PRAVIDLA PRO ŠKOLY (DŮLEŽITÉ):
-- Základní škola (ZŠ): type="primary_school", keyword="základní škola ZŠ"
-- Střední škola / Gymnázium: type="secondary_school", keyword="střední škola gymnázium"
-- Základní umělecká škola: keyword="základní umělecká škola ZUŠ" (bez type)
-- Mateřská školka: keyword="mateřská škola MŠ školka" (bez type — Google Places nemá spolehlivý typ pro MŠ v ČR)
-- Vysoká škola / Univerzita: type="university" (bez keyword)
-
----
-
-# 🚫 STRIKTNÍ ZÁKAZY A PRAVIDLA PROTI HALUCINACÍM
-
-1. **ŽÁDNÉ PLACEHOLDERY:** NIKDY v odpovědi nepoužívej text v závorkách jako "[název nejbližšího města]" nebo "[vložte jméno]". Vždy pracuj s reálnými názvy a souřadnicemi z kontextu dotazu.
-2. **NEVYMÝŠLEJ SI WEBOVÉ ADRESY (URL):** Pokud si nejsi 100% jistý konkrétní a funkční adresou webu, VŮBEC ji nepiš. Raději uživateli poraď, ať název vyhledá, NEBO použij bezpečné odkazy na vyhledávání.
-   *SPRÁVNĚ:* [Vyhledat ZŠ Pardubice na Google](https://www.google.com/search?q=z%C3%A1kladn%C3%AD+%C5%A1kola+Pardubice)
-   *SPRÁVNĚ:* [Zobrazit na Google Maps](https://www.google.com/maps/search/L%C3%A9k%C3%A1rna+Pardubice)
-   *ŠPATNĚ:* www.zspardubice.cz (pokud to není ověřený fakt).
-3. **NEVYMÝŠLEJ SI PŘESNÉ CENY:** Pokud neznáš aktuální přesnou cenu (nájmů, domů), uveď to jako "odhad" nebo "průměr na trhu".
-`;
-}
-
 export async function POST(request: NextRequest) {
     try {
         const data: ChatRequest = await request.json();
         const model = data.model || DEFAULT_MODEL;
         const conversationMessages = data.messages || [];
 
-        const geoFiles = listGeoJsonFiles();
-
         const lastUserMsg = [...conversationMessages].reverse().find(m => m.role === 'user');
         if (!lastUserMsg) {
             return NextResponse.json({ error: 'No user message found' }, { status: 400 });
         }
+
+        const geoFiles = listGeoJsonFiles();
 
         console.log("\n" + "=".repeat(60));
         console.log(`[AI] Model: ${model}`);
@@ -578,35 +672,45 @@ export async function POST(request: NextRequest) {
         let _debug: any = null;
 
         if (model === 'gemini') {
-            const systemPrompt = buildSystemPromptGemini();
-            const messages: ChatMessage[] = [
-                { role: 'system', content: systemPrompt },
-                ...conversationMessages,
-            ];
+            const { extraction, pois: extractedPois } = await geminiStepExtract(
+                lastUserMsg.content,
+                geoFiles,
+                conversationMessages,
+            );
+            console.log(`[AI Gemini] Extraction:`, extraction);
+            console.log(`[AI Gemini] POI commands: ${extractedPois.length}`);
 
-            const step1Reply = await call_gemini(messages);
-            console.log(`[AI] Gemini Step 1 reply: ${step1Reply.length} chars`);
+            step1Pois = extractedPois.length > 0 ? extractedPois : null;
 
-            const s1PoisMatches = Array.from(step1Reply.matchAll(/```json:pois\s*([\s\S]*?)```/g)) as any[];
-            step1Pois = s1PoisMatches
-                .map(m => { try { return JSON.parse(m[1].trim()); } catch { return null; } })
-                .filter(Boolean);
+            let geoSearchResults: SearchResult[] = [];
+            if (!extraction.isConversational && extraction.keywords.length > 0) {
+                geoSearchResults = serverSideSearch(extraction.keywords, extraction.selectedFiles, geoFiles);
+            }
+            const geoSearchContext = buildGeoSearchContext(geoSearchResults);
+            console.log(`[AI Gemini] GeoJSON search: ${geoSearchResults.length} files with matches`);
 
+            let placesContext: string | null = null;
+            let anyPlacesFound = false;
             const placesApiKey = process.env.GOOGLE_PLACES_API_KEY;
 
-            if (step1Pois.length > 0 && placesApiKey) {
+            if (step1Pois && step1Pois.length > 0 && placesApiKey) {
                 const placesResults: { label: string; places: any[]; found: boolean }[] = [];
+
                 for (const poiReq of step1Pois) {
-                    console.log(`[AI] Fetching places: "${poiReq.label || poiReq.type || poiReq.keyword}"`);
+                    console.log(`[AI Gemini] Fetching places: "${poiReq.label || poiReq.type || poiReq.keyword}"`);
                     const places = await fetchPlacesForPoi(placesApiKey, poiReq);
-                    console.log(`[AI]   → ${places.length} results`);
-                    placesResults.push({ label: poiReq.label || poiReq.keyword || poiReq.type || 'Místa', places, found: places.length > 0 });
+                    console.log(`[AI Gemini]   → ${places.length} results`);
+                    placesResults.push({
+                        label: poiReq.label || poiReq.keyword || poiReq.type || 'Místa',
+                        places,
+                        found: places.length > 0,
+                    });
                 }
 
                 searchMeta = placesResults.map(r => ({ label: r.label, count: r.places.length, found: r.found }));
+                anyPlacesFound = placesResults.some(r => r.found);
 
-                const anyFound = placesResults.some(r => r.found);
-                if (anyFound) {
+                if (anyPlacesFound) {
                     const features: any[] = [];
                     for (const result of placesResults) {
                         for (const p of result.places) {
@@ -622,56 +726,72 @@ export async function POST(request: NextRequest) {
                     if (features.length > 0) poiGeojson = { type: 'FeatureCollection', features };
                 }
 
-                const placesContext = buildPlacesContextForAI(placesResults);
-                const poisInstruction = anyFound
-                    ? `NEPŘIDÁVEJ json:pois bloky — tato data jsou již zpracována a zobrazena na mapě.`
-                    : `Protože nebyla nalezena žádná místa v zadané oblasti, MUSÍŠ přidat json:pois blok pro alternativní místo, které doporučuješ (např. nejbližší velké město). Použij pole "placeName" s názvem alternativního města.`;
-                const step2Messages: ChatMessage[] = [
-                    ...messages,
-                    {
-                        role: 'system',
-                        content:
-                            `${placesContext}\n\n` +
-                            `Na základě těchto výsledků vyhledávání napiš finální, kompletní odpověď uživateli. ` +
-                            `Pokud byla nějaká místa nalezena, zmiň jejich konkrétní názvy, adresy a případné kontakty. ` +
-                            `Pokud nebylo nalezeno nic, informuj uživatele a navrhni alternativy (větší okruh, jiné hledání apod.). ` +
-                            `${poisInstruction} ` +
-                            `MUSÍŠ přidat json:location blok pro každé konkrétní město nebo oblast, o které mluvíš v odpovědi.`,
-                    },
-                ];
-                console.log(`[AI] Gemini Step 2 call — found: ${anyFound}, groups: ${placesResults.length}`);
-                replyContent = await call_gemini(step2Messages);
+                placesContext = buildPlacesContextForAI(placesResults);
 
-                if (!anyFound) step1Pois = [];
-            } else {
-                replyContent = step1Reply;
+                if (!anyPlacesFound) step1Pois = [];
             }
+
+            if (extraction.isConversational) {
+                const messages: ChatMessage[] = [
+                    { role: 'system', content: CONVERSATIONAL_PROMPT },
+                    ...conversationMessages,
+                ];
+                replyContent = await call_gemini(messages);
+            } else {
+                const finalPrompt = buildGeminiFinalPrompt(
+                    geoSearchContext,
+                    placesContext,
+                    extraction,
+                    anyPlacesFound,
+                );
+
+                const messages: ChatMessage[] = [
+                    { role: 'system', content: finalPrompt },
+                    ...conversationMessages,
+                ];
+
+                console.log(`[AI Gemini Step 4] Final call — prompt ${(finalPrompt.length / 1024).toFixed(1)} KB`);
+                replyContent = await call_gemini(messages);
+            }
+
+            _debug = {
+                keywords: extraction.keywords,
+                selectedFiles: extraction.selectedFiles,
+                isConversational: extraction.isConversational,
+                searchResultFiles: geoSearchResults.map(r => ({
+                    file: r.file,
+                    matches: r.matchedFeatures,
+                })),
+            };
 
         } else {
             const actualModel = model === 'gemma' ? DEFAULT_MODEL : model;
 
-            const extraction = await ollamaStepExtract(lastUserMsg.content, geoFiles, actualModel);
-            console.log(`[AI] Extraction:`, extraction);
+            const extraction = await llmStepExtract(
+                lastUserMsg.content,
+                geoFiles,
+                (msgs) => call_ollama(msgs, actualModel),
+            );
+            console.log(`[AI Ollama] Extraction:`, extraction);
 
             let searchResults: SearchResult[] = [];
             if (!extraction.isConversational && extraction.keywords.length > 0) {
-                searchResults = ollamaStepSearch(extraction.keywords, extraction.selectedFiles, geoFiles);
+                searchResults = serverSideSearch(extraction.keywords, extraction.selectedFiles, geoFiles);
             }
-            console.log(`[AI] Search: ${searchResults.length} files with matches`);
+            console.log(`[AI Ollama] Search: ${searchResults.length} files with matches`);
 
             const systemPrompt = extraction.isConversational
                 ? CONVERSATIONAL_PROMPT
-                : buildOllamaResponsePrompt(searchResults, extraction, '');
+                : buildOllamaResponsePrompt(searchResults, extraction);
 
             const step3Messages: ChatMessage[] = [
                 { role: 'system', content: systemPrompt },
                 ...conversationMessages,
             ];
 
-            console.log(`[AI] Step 3: system prompt ${(systemPrompt.length / 1024).toFixed(1)} KB, ${step3Messages.length} messages`);
+            console.log(`[AI Ollama] Step 3: prompt ${(systemPrompt.length / 1024).toFixed(1)} KB, ${step3Messages.length} msgs`);
             replyContent = await call_ollama(step3Messages, actualModel);
 
-            // Build debug info
             _debug = {
                 keywords: extraction.keywords,
                 selectedFiles: extraction.selectedFiles,
@@ -714,6 +834,7 @@ export async function POST(request: NextRequest) {
             .replace(/```json:filters\s*[\s\S]*?```/g, '')
             .replace(/```json:pois\s*[\s\S]*?```/g, '')
             .replace(/```json:location\s*[\s\S]*?```/g, '')
+            .replace(/```json:extraction\s*[\s\S]*?```/g, '')
             .trim();
 
         return NextResponse.json({
@@ -736,16 +857,17 @@ export async function POST(request: NextRequest) {
             error.code === 'UND_ERR_HEADERS_TIMEOUT';
 
         const isConnection = error.code === 'ECONNREFUSED' ||
-            error.cause?.code === 'ECONNREFUSED';
+            error.cause?.code === 'ECONNREFUSED' ||
+            error.cause?.code === 'UND_ERR_CONNECT_TIMEOUT';
 
         let errorMessage: string;
         let status: number;
 
         if (isConnection) {
-            errorMessage = 'Ollama server nebezi. Spustte "ollama serve" v terminalu.';
+            errorMessage = `Server nedostupný na ${OLLAMA_URL}. Zkontrolujte připojení.`;
             status = 503;
         } else if (isTimeout) {
-            errorMessage = 'Model neodpovedel vcas. Zkuste kratsi dotaz nebo mensi model.';
+            errorMessage = 'Model neodpověděl včas. Zkuste kratší dotaz nebo menší model.';
             status = 504;
         } else {
             errorMessage = error.message || 'Internal Server Error';
