@@ -21,45 +21,45 @@ export const QUESTION_CATEGORY_MAP: Record<number, {
     4: { category: 'educationScore', type: 'positive' },
     5: { category: 'agro', type: 'positive' }, // hluk - vysoká doprava = hluk
     6: { category: 'industry', type: 'blacklist' }, // průmyslové zóny - boolean tile property
-    7: { category: 'cultureScore', type: 'positive' },
-    8: { category: 'transportScore', type: 'positive' },
-    9: { category: 'otherScore', type: 'blacklist' }, // ovzduší -> proxy
-    10: { category: 'otherScore', type: 'positive' },
-    11: { category: 'healthcareScore', type: 'positive' },
-    12: { category: 'cultureScore', type: 'positive' },
+    7: { category: 'cultureScore', type: 'positive', percentThreshold: 30 },
+    8: { category: 'transportScore', type: 'positive', percentThreshold: 60 },
+    9: { category: 'transportScore', type: 'negative', percentThreshold: 50 }, // ovzduší -> proxy
+    10: { category: 'cultureScore', type: 'positive', percentThreshold: 80 },
+    11: { category: 'healthcareScore', type: 'positive', percentThreshold: 20 },
+    12: { category: 'educationScore', type: 'positive', percentThreshold: 40 },
     13: { category: 'airport', type: 'positive' }, // letiště - boolean, radius ~15 dlaždic v DB
     14: { category: 'castles', type: 'positive' }, // hrady/zámky - boolean
-    15: { category: 'industry', type: 'positive' }, // průmyslové zóny - boolean
+    15: { category: 'industry', type: 'positive', percentThreshold: 20 }, // průmyslové zóny - boolean
     16: { category: 'cultureScore', type: 'positive', percentThreshold: 50 },
     17: { category: 'healthcareScore', type: 'positive' },
-    18: { category: 'otherScore', type: 'blacklist' }, // vedra -> proxy
+    18: { category: 'natureScore', type: 'negative' }, // vedra -> proxy
     19: { category: 'healthcareScore', type: 'positive' },
     20: { category: 'castles', type: 'positive' }, // boolean
-    21: { category: 'otherScore', type: 'positive' },
-    22: { category: 'otherScore', type: 'positive' },
+    21: { category: 'natureScore', type: 'positive', percentThreshold: 80 },
+    22: { category: 'otherScore', type: 'positive', percentThreshold: 80 },
     23: { category: 'livePerformances', type: 'positive' }, // boolean
     24: { category: 'otherScore', type: 'positive' },
     25: { category: 'healthcareScore', type: 'positive', percentThreshold: 20 },
-    26: { category: 'otherScore', type: 'positive' },
+    26: { category: 'educationScore', type: 'positive', percentThreshold: 20 },
     27: { category: 'cultureScore', type: 'positive' },
-    28: { category: 'transportScore', type: 'blacklist', percentThreshold: 70 }, // boolean
+    28: { category: 'transportScore', type: 'negative', percentThreshold: 70 }, // boolean
     29: { category: 'otherScore', type: 'positive' },
     30: { category: 'educationScore', type: 'positive' },
-    31: { category: 'otherScore', type: 'blacklist' }, // větrná eroze -> proxy
+    31: { category: 'natureScore', type: 'negative', percentThreshold: 10 }, // větrná eroze -> proxy
     32: { category: 'cultureScore', type: 'positive' },
     33: { category: 'otherScore', type: 'positive' },
     34: { category: 'transportScore', type: 'positive' },
-    35: { category: 'otherScore', type: 'positive' },
-    36: { category: 'cultureScore', type: 'positive' },
+    35: { category: 'otherScore', type: 'positive', percentThreshold: 70 },
+    36: { category: 'castles', type: 'positive' },
     37: { category: 'livePerformances', type: 'positive' }, // boolean
     38: { category: 'cultureScore', type: 'positive' },
     39: { category: 'otherScore', type: 'positive' },
     40: { category: 'cultureScore', type: 'positive' },
     41: { category: 'otherScore', type: 'positive' },
-    42: { category: 'cultureScore', type: 'positive' },
-    43: { category: 'agro', type: 'positive' }, // boolean
+    42: { category: 'cultureScore', type: 'positive', percentThreshold: 90 },
+    43: { category: 'otherScore', type: 'positive', percentThreshold: 90 }, // boolean
     44: { category: 'otherScore', type: 'positive' },
-    45: { category: 'otherScore', type: 'positive' },
+    45: { category: 'agro', type: 'positive' },
     46: { category: 'otherScore', type: 'positive' },
     47: { category: 'otherScore', type: 'positive' },
     48: { category: 'otherScore', type: 'positive' },
