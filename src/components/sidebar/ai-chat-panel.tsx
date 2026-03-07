@@ -537,10 +537,10 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
             <div className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-4 relative z-10 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent pr-1" data-lenis-prevent>
                 {messages.length === 0 && !isLoading && (
                     <div className="h-full flex flex-col items-center justify-center text-center opacity-50 gap-4 mt-8">
-                        <p className="max-w-[200px] text-sm">
+                        <p className="max-w-[240px] text-sm leading-relaxed">
                             {language === 'cs'
-                                ? 'Klepněte na mapu a zeptejte se AI na detaily okolí nebo preference bydlení.'
-                                : 'Click on the map and ask AI about the surroundings or housing preferences.'}
+                                ? 'Klepněte na mapu a zeptejte se AI na detaily okolí nebo preference bydlení. (Pravé tlačítko myši je pouze pro PC, na mobilu stačí napsat název obce přímo do chatu).'
+                                : 'Click on the map and ask AI about the surroundings or housing preferences. (Right-click is PC only, on mobile just type the city name directly into the chat).'}
                         </p>
                     </div>
                 )}

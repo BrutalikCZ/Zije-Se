@@ -71,7 +71,7 @@ export default function AppPage() {
     const [isFeatureInfoOpen, setIsFeatureInfoOpen] = useState(false);
     const [clickedFeatures, setClickedFeatures] = useState<any[]>([]);
 
-    const [aiModel, setAiModel] = useState<'gemma' | 'gemini'>('gemma');
+    const [aiModel, setAiModel] = useState<'gemma' | 'gemini'>('gemini');
 
     // Auth Panel Toggle Exposed for nested components
     const openAuthPanel = () => {
@@ -161,16 +161,7 @@ export default function AppPage() {
         };
     }, [mapType, colorBlindMode, showFills, layerOpacity, mapOpacity, pointSize, aiModel, user, updateUser]);
 
-    // Per-category heatmap toggles
-    const HEATMAP_CATEGORIES = [
-        { key: 'healthcareScore', labelCs: 'Zdravotnictví', labelEn: 'Healthcare' },
-        { key: 'educationScore', labelCs: 'Vzdělávání', labelEn: 'Education' },
-        { key: 'transportScore', labelCs: 'Doprava', labelEn: 'Transport' },
-        { key: 'cultureScore', labelCs: 'Kultura', labelEn: 'Culture' },
-        { key: 'otherScore', labelCs: 'Ostatní', labelEn: 'Other' },
-        { key: 'stopsScore', labelCs: 'Zastávky', labelEn: 'Stops' },
-        { key: 'natureScore', labelCs: 'Příroda', labelEn: 'Nature' },
-    ] as const;
+
 
     // Unified step-based color scale for all categories
     // Score 0=dark red → light red → yellow → orange → light green → dark green → 100+=light blue
@@ -189,7 +180,7 @@ export default function AppPage() {
         { threshold: 100, color: '#4FC3F7' },    // 100%+ - light blue
     ];
 
-    const [activeHeatmaps, setActiveHeatmaps] = useState<Record<string, boolean>>({});
+
     const [heatmapData, setHeatmapData] = useState<GeoJSON.FeatureCollection | null>(null);
     const [highlightedTilesData, setHighlightedTilesData] = useState<GeoJSON.FeatureCollection | null>(null);
     const [aiPoiData, setAiPoiData] = useState<GeoJSON.FeatureCollection | null>(null);
@@ -379,11 +370,9 @@ export default function AppPage() {
         return () => window.removeEventListener('tour:focus', handleTourFocus);
     }, [globalData]);
 
-    const toggleHeatmap = (key: string, value: boolean) => {
-        setActiveHeatmaps(prev => ({ ...prev, [key]: value }));
-    };
 
-    const anyHeatmapActive = Object.values(activeHeatmaps).some(Boolean);
+
+    const anyHeatmapActive = false;
 
     const resetSettings = () => {
         setMapType('default');
@@ -392,7 +381,7 @@ export default function AppPage() {
         setLayerOpacity(0.8);
         setMapOpacity(1.0);
         setPointSize(8);
-        setActiveHeatmaps({});
+
         setQuestionnaireHeatmapData(null);
     };
 
@@ -439,8 +428,7 @@ export default function AppPage() {
         setQuestionnaireHeatmapData(result);
         setShowQuestionnaireHeatmap(true);
 
-        // Vypneme per-category heatmapy ať neruší
-        setActiveHeatmaps({});
+
     };
 
     // Vypočítat heatmapu automaticky při načtení, pokud uživatel má data
@@ -882,10 +870,8 @@ export default function AppPage() {
                     setMapOpacity={setMapOpacity}
                     pointSize={pointSize}
                     setPointSize={setPointSize}
-                    heatmapCategories={HEATMAP_CATEGORIES}
-                    activeHeatmaps={activeHeatmaps}
-                    toggleHeatmap={toggleHeatmap}
                     resetSettings={resetSettings}
+
                     onOpenDatasets={() => {
                         setIsSettingsOpen(false);
                         setIsDatasetsOpen(true);
@@ -921,20 +907,7 @@ export default function AppPage() {
                         showFills={showFills}
                         pointSize={pointSize}
                     />
-                    {heatmapData && HEATMAP_CATEGORIES.map(cat => (
-                        activeHeatmaps[cat.key] && (
-                            <MapFillLayer
-                                key={cat.key}
-                                id={cat.key}
-                                data={heatmapData}
-                                colorProp={cat.key}
-                                colorScale={HEATMAP_COLOR_SCALE}
-                                defaultColor="rgba(0,0,0,0)"
-                                opacity={layerOpacity}
-                                onClick={handleTileClick}
-                            />
-                        )
-                    ))}
+
                     {questionnaireHeatmapData && showQuestionnaireHeatmap && (
                         <MapFillLayer
                             id="questionnaire-heatmap"
