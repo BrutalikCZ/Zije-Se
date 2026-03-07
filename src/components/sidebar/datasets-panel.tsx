@@ -6,7 +6,7 @@ import { WFS_SERVICES, WfsService, wfsLayerKey } from '@/lib/wfs-services';
 
 interface FileNode {
     name: string;
-    type: 'file' | 'directory' | 'property';
+    type: 'file' | 'directory';
     path?: string;
     children?: FileNode[];
 }
@@ -24,9 +24,9 @@ interface DatasetsPanelProps {
 function FileTreeNode({ node, level = 0, activeLayers, toggleLayer, insideTree = false }: { node: FileNode; level?: number; activeLayers: Record<string, boolean>; toggleLayer: (layerPath: string, value: boolean) => void; insideTree?: boolean; }) {
     const [expanded, setExpanded] = useState(false);
     const isDir = node.type === 'directory';
-    const isLayer = node.type === 'property' || (node.type === 'file' && node.name.endsWith('.geojson'));
+    const isGeoJson = node.type === 'file' && node.name.toLowerCase().endsWith('.geojson');
     const layerPath = node.path ? node.path.replace(/^\/data\//, '') : '';
-    const isActive = isLayer ? !!activeLayers[layerPath] : false;
+    const isActive = isGeoJson ? !!activeLayers[layerPath] : false;
 
     if (isDir) {
         return (
@@ -66,26 +66,22 @@ function FileTreeNode({ node, level = 0, activeLayers, toggleLayer, insideTree =
         );
     }
 
+    if (!isGeoJson) return null;
+
     return (
         <label className="relative flex items-center gap-3 cursor-pointer py-1.5 pl-3 pr-2 group rounded-xl hover:bg-white/5 dark:hover:bg-black/5 transition-colors border border-transparent hover:border-white/5 dark:hover:border-black/5">
             {insideTree && <div className="absolute left-[-12px] top-1/2 w-3 h-px bg-white/10 dark:bg-black/10" />}
-            {isLayer ? (
-                <div className="relative flex items-center shrink-0">
-                    <input
-                        type="checkbox"
-                        className="sr-only"
-                        checked={isActive}
-                        onChange={(e) => toggleLayer(layerPath, e.target.checked)}
-                    />
-                    <div className={`w-9 h-5 rounded-full transition-colors ${isActive ? 'bg-[#3388ff]' : 'bg-white/10 dark:bg-black/10 group-hover:bg-white/20 dark:group-hover:bg-black/20'}`}></div>
-                    <div className={`absolute w-4 h-4 bg-white dark:bg-[#0b0b0b] rounded-full left-0.5 top-0.5 transition-transform shadow-sm ${isActive ? 'translate-x-[16px]' : ''}`}></div>
-                </div>
-            ) : (
-                <div className="flex items-center shrink-0 opacity-50 ml-1.5 mr-1.5">
-                    <File size={14} />
-                </div>
-            )}
-            <span className={`text-[13px] font-medium truncate opacity-70 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all w-full flex-1 ${isLayer && isActive ? 'text-[#3388ff]' : ''}`} title={node.name}>
+            <div className="relative flex items-center shrink-0">
+                <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={isActive}
+                    onChange={(e) => toggleLayer(layerPath, e.target.checked)}
+                />
+                <div className={`w-9 h-5 rounded-full transition-colors ${isActive ? 'bg-[#3388ff]' : 'bg-white/10 dark:bg-black/10 group-hover:bg-white/20 dark:group-hover:bg-black/20'}`}></div>
+                <div className={`absolute w-4 h-4 bg-white dark:bg-[#0b0b0b] rounded-full left-0.5 top-0.5 transition-transform shadow-sm ${isActive ? 'translate-x-[16px]' : ''}`}></div>
+            </div>
+            <span className={`text-[13px] font-medium truncate opacity-70 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all w-full flex-1 ${isActive ? 'text-[#3388ff]' : ''}`} title={node.name}>
                 {node.name.replace('.geojson', '').split('(')[0].replace(/_+/g, ' ').trim()}
             </span>
         </label>
@@ -308,6 +304,16 @@ export function DatasetsPanel({
                                 />
                             ))}
                         </div>
+                    </div>
+
+                    {/* Attribution notice */}
+                    <div className="mt-6 px-1 pb-2">
+                        <div className="h-px w-full bg-white/10 dark:bg-black/10 mb-4" />
+                        <p className="text-[10px] opacity-40 leading-relaxed text-center">
+                            {language === 'cs'
+                                ? '© ČÚZK · © VÚV TGM · © ČGS · © ČSÚ · © ČHMÚ · © AOPK ČR · © krajské úřady · © OpenStreetMap contributors (ODbL) · Podkladová mapa © CARTO, CC BY 3.0'
+                                : '© ČÚZK · © VÚV TGM · © ČGS · © ČSÚ · © ČHMÚ · © AOPK ČR · © Regional authorities · © OpenStreetMap contributors (ODbL) · Basemap © CARTO, CC BY 3.0'}
+                        </p>
                     </div>
                 </div>
             </div>

@@ -561,6 +561,7 @@ export default function Home() {
                   <button onClick={() => setActiveLegalPanel('gdpr')} className="hover:text-white dark:hover:text-[#0b0b0b] transition-colors bg-transparent border-none p-0 cursor-pointer text-gray-400 dark:text-gray-600">GDPR</button>
                   <button onClick={() => setActiveLegalPanel('terms')} className="hover:text-white dark:hover:text-[#0b0b0b] transition-colors bg-transparent border-none p-0 cursor-pointer text-gray-400 dark:text-gray-600">{language === 'cs' ? 'Podmínky' : 'Terms'}</button>
                   <button onClick={() => setActiveLegalPanel('privacy')} className="hover:text-white dark:hover:text-[#0b0b0b] transition-colors bg-transparent border-none p-0 cursor-pointer text-gray-400 dark:text-gray-600">{language === 'cs' ? 'Ochrana soukromí' : 'Privacy'}</button>
+                  <button onClick={() => setActiveLegalPanel('attribution')} className="hover:text-white dark:hover:text-[#0b0b0b] transition-colors bg-transparent border-none p-0 cursor-pointer text-gray-400 dark:text-gray-600">{language === 'cs' ? 'Zdroje dat' : 'Data Sources'}</button>
                   <button onClick={() => setActiveLegalPanel('contact')} className="hover:text-white dark:hover:text-[#0b0b0b] transition-colors bg-transparent border-none p-0 cursor-pointer text-gray-400 dark:text-gray-600">{language === 'cs' ? 'Kontakt' : 'Contact'}</button>
                 </div>
 

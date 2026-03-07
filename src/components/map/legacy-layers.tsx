@@ -103,7 +103,9 @@ export function LegacyLayers({
                     }
                     layerId = `wfs-${filename}`;
                 } else {
-                    dataUrl = `/data/${filename.split('?')[0]}`;
+                    // Encode the URI but keep the slashes
+                    const encodedPath = filename.split('/').map(segment => encodeURIComponent(segment)).join('/');
+                    dataUrl = `/data/${encodedPath.split('?')[0]}`;
                     layerId = `geojson-${filename}`;
                 }
 

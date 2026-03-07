@@ -34,32 +34,21 @@ export async function GET() {
                     });
                 } else if (item.name.endsWith('.geojson')) {
                     const filePath = path.join(currentPath, item.name);
-                    let properties: string[] = [];
-                    try {
-                        const content = fs.readFileSync(filePath, 'utf-8');
-                        const json = JSON.parse(content);
-                        if (json.features && json.features.length > 0 && json.features[0].properties) {
-                            properties = Object.keys(json.features[0].properties);
-                        }
-                    } catch (e) {
-                        console.error('Error parsing geojson:', filePath, e);
-                    }
+                    const publicPath = filePath.replace(path.join(process.cwd(), 'public'), '').replace(/\\/g, '/');
 
                     result.push({
                         name: item.name,
                         type: 'file',
-                        path: filePath.replace(path.join(process.cwd(), 'public'), '').replace(/\\/g, '/'),
-                        children: properties.length > 0 ? properties.map(p => ({
-                            name: p,
-                            type: 'property',
-                            path: filePath.replace(path.join(process.cwd(), 'public'), '').replace(/\\/g, '/') + '?prop=' + p
-                        })) : undefined
+                        path: publicPath
                     });
                 } else {
+                    const filePath = path.join(currentPath, item.name);
+                    const publicPath = filePath.replace(path.join(process.cwd(), 'public'), '').replace(/\\/g, '/');
+
                     result.push({
                         name: item.name,
                         type: 'file',
-                        path: path.join(currentPath, item.name).replace(path.join(process.cwd(), 'public'), '').replace(/\\/g, '/')
+                        path: publicPath
                     });
                 }
             }
