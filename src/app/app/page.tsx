@@ -169,6 +169,7 @@ export default function AppPage() {
         { key: 'cultureScore', labelCs: 'Kultura', labelEn: 'Culture' },
         { key: 'otherScore', labelCs: 'Ostatní', labelEn: 'Other' },
         { key: 'stopsScore', labelCs: 'Zastávky', labelEn: 'Stops' },
+        { key: 'natureScore', labelCs: 'Příroda', labelEn: 'Nature' },
     ] as const;
 
     // Unified step-based color scale for all categories
