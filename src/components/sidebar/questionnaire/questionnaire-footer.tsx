@@ -9,21 +9,15 @@ interface QuestionnaireFooterProps {
     handleBack: () => void;
     handleNext: () => void;
     handleFinish: () => void;
-    handleDebugReset: () => void;
     debugUnlocked: boolean;
 }
 
-export function QuestionnaireFooter({ currentStep, isLastStep, answeredCount, handleBack, handleNext, handleFinish, handleDebugReset, debugUnlocked }: QuestionnaireFooterProps) {
+export function QuestionnaireFooter({ currentStep, isLastStep, answeredCount, handleBack, handleNext, handleFinish, debugUnlocked }: QuestionnaireFooterProps) {
     const { language } = useLanguage();
 
     return (
         <div className="shrink-0 border-t border-white/10 dark:border-black/10 py-4 flex flex-col gap-2 text-xs">
-            <button
-                onClick={handleDebugReset}
-                className="w-full px-2 py-1.5 rounded-full font-mono text-[10px] bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 border border-yellow-500/20 transition-colors cursor-pointer"
-            >
-                DEBUG
-            </button>
+
             <div className="flex items-center justify-between gap-2">
             <button
                 onClick={handleBack}

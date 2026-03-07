@@ -7,9 +7,11 @@ interface QuestionnaireIntroProps {
     hasHistory: boolean;
     onStart: () => void;
     onSkip: () => void;
+    onReset: () => void;
+    isHeatmapActive?: boolean;
 }
 
-export function QuestionnaireIntro({ isLoggedIn, isFinished, hasHistory, onStart, onSkip }: QuestionnaireIntroProps) {
+export function QuestionnaireIntro({ isLoggedIn, isFinished, hasHistory, onStart, onSkip, onReset, isHeatmapActive }: QuestionnaireIntroProps) {
     const { language } = useLanguage();
 
     return (
@@ -37,6 +39,19 @@ export function QuestionnaireIntro({ isLoggedIn, isFinished, hasHistory, onStart
                             ? (language === 'cs' ? 'Pokračovat v dotazníku' : 'Continue questionnaire')
                             : (language === 'cs' ? 'Začít dotazník' : 'Start questionnaire')}
                 </button>
+
+                {(isFinished || hasHistory) && isLoggedIn && (
+                    <button
+                        onClick={onReset}
+                        disabled={isHeatmapActive}
+                        title={isHeatmapActive ? (language === 'cs' ? 'Před resetem vypněte heatmapu' : 'Turn off heatmap before reset') : undefined}
+                        className={`w-full text-center px-4 py-3 rounded-full font-medium transition-colors border backdrop-blur-md ${isHeatmapActive
+                            ? 'bg-gray-500/10 border-gray-500/20 text-gray-500/50 cursor-not-allowed'
+                            : 'cursor-pointer bg-red-500/10 hover:bg-red-500/20 text-red-500/80 border-red-500/20'}`}
+                    >
+                        {language === 'cs' ? 'Resetovat dotazník' : 'Reset questionnaire'}
+                    </button>
+                )}
 
                 <button
                     onClick={onSkip}

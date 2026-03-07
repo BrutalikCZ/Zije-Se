@@ -17,11 +17,10 @@ interface QuestionnairePanelProps {
     setIsCollapsed: (v: boolean) => void;
     onEvaluated?: (answers: Record<number, boolean>) => void;
     onLoginClick?: () => void;
-    onRemoveHeatmap?: () => void;
-    hasHeatmap?: boolean;
+    isHeatmapActive?: boolean;
 }
 
-export function QuestionnairePanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onEvaluated, onLoginClick, onRemoveHeatmap, hasHeatmap }: QuestionnairePanelProps) {
+export function QuestionnairePanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onEvaluated, onLoginClick, isHeatmapActive }: QuestionnairePanelProps) {
     const { language } = useLanguage();
     const [mode, setMode] = useState<'intro' | 'questionnaire' | 'result'>('intro');
     const [answers, setAnswers] = useState<Record<number, boolean>>({});
@@ -168,8 +167,6 @@ export function QuestionnairePanel({ isOpen, onClose, isCollapsed, setIsCollapse
                             isFinished={isFinished}
                             answeredCount={answeredCount}
                             onContinue={handleResultContinue}
-                            onRemoveHeatmap={onRemoveHeatmap ?? (() => {})}
-                            hasHeatmap={hasHeatmap ?? false}
                         />
                     ) : mode === 'intro' ? (
                         <QuestionnaireIntro
@@ -178,6 +175,8 @@ export function QuestionnairePanel({ isOpen, onClose, isCollapsed, setIsCollapse
                             hasHistory={hasHistory}
                             onStart={handleStartQuestionnaire}
                             onSkip={handleSkip}
+                            onReset={handleDebugReset}
+                            isHeatmapActive={isHeatmapActive}
                         />
                     ) : (
                         <div className="flex flex-col h-full w-full">
@@ -200,7 +199,6 @@ export function QuestionnairePanel({ isOpen, onClose, isCollapsed, setIsCollapse
                                         handleBack={handleBack}
                                         handleNext={handleNext}
                                         handleFinish={handleFinish}
-                                        handleDebugReset={handleDebugReset}
                                         debugUnlocked={debugUnlocked}
                                     />
                                 )}

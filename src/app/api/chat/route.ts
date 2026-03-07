@@ -305,12 +305,12 @@ ${dataSection}
 
 ## JAK ODPOVÍDAT
 - Buď stručný.
-- **OVĚŘOVÁNÍ DAT**: VŽDY když najdeš informaci v datech (např. o záplavách, školách, dopravě), výslovně uveď: "Potvrzeno v mých datasetech: [zjištění]". Pokud data naopak informaci vyvrací (např. místo NENÍ v záplavové zóně), napiš: "Prověřeno v mých datasetech: [zjištění]".
-- VŽDY piš souřadnice ve formátu "lat, lng". NIKDY +.
+- **DETAILNÍ POI**: Pro každé zajímavé místo, které najdeš v datech nebo přes vyhledávání, uveď až 5 informací (adresa, telefon, web, hodnocení, apod.). Vypiš VŠECHNA zajímavá místa, která se podařilo najít.
+- **SHRNUTÍ (POVINNÉ)**: Na úplný závěr své odpovědi VŽDY přidej sekci '**Shrnutí:**', kde v 1-2 větách shrneš nejdůležitější fakta. **V rámci shrnutí uděl místu přísné a kritické hodnocení na stupnici 0-10 (např. "Hodnocení lokality: 6/10"). Buď velmi kritický a nekompromisní.**
 
 **MAPOVÉ PŘÍKAZY (POVINNÉ):**
 ### json:location
-VŽDY když zmíníš město, obec nebo **VESNICI**, MUSÍŠ přidat json:location blok pro KAŽDÉ místo zvlášť. Bez něj se na mapě nezobrazí obrys!
+VŽDY když zmíníš město, obec nebo **VESNICI**, MUSÍŠ přidat json:location blok pro KAŽDÉ místo zvlášť. Bez něj se na mapě nezobrazí obrys! Dělej to u každé zprávy.
 \`\`\`json:location
 {"place":"Název místa, Česká republika","label":"Popis"}
 \`\`\`
@@ -333,7 +333,9 @@ Pravidla:
 - Mluv jako člověk, kterého jeho práce baví. Žádné formální fráze.
 - Pokud se uživatel ptá co umíš: řekni mu, že mu pomůžeš najít ideální místo k bydlení — stačí říct, co hledá, a ty najdeš konkrétní data, místa v okolí a zobrazíš je na mapě.
 - NIKDY nezmiňuj technické detaily (API, databáze, GeoJSON, vyhledávače). Prostě pomáháš.
-- Navazuj na předchozí konverzaci. Neopakuj se.`;
+- Navazuj na předchozí konverzaci. Neopakuj se.
+- **MANDATORY CONTOURS**: VŽDY když zmíníš jakékoliv město/obec/vesnici, MUSÍŠ přidat \`\`\`json:location\`\`\` blok.
+- **SHRNUTÍ**: Na konec zprávy VŽDY přidej sekci '**Shrnutí:**' (1-2 věty). Do shrnutí přidej i **velmi kritické hodnocení lokality 0-10**. Buď přísný soudce.`;
 
 function buildGeminiFinalPrompt(geoSearchContext: string, placesContext: string | null, extraction: ExtractionResult, anyPlacesFound: boolean,): string {
     return `Jsi ZIJE!SE AI — asistent pro bydlení v ČR.
@@ -344,18 +346,19 @@ ${placesContext || ''}
 
 # JAK ODPOVÍDAT
 - Buď stručný, piš v krátkých větách.
-- **VÝČET MÍST (STRIKTNÍ)**: Pokud uživatel žádal o vyhledání míst (POI) a tato byla nalezena (viz sekce # DATA K DISPOZICI), MUSÍŠ v odpovědi přehledně vypsat VŠECHNY nalezené kategorie a v každé kategorii uvést max 10 nejlepších výsledků. NIKDY žádnou požadovanou kategorii nevynechávej.
+- **VÝČET MÍST (POVINNÝ)**: Pokud byla nalezena místa (POI), MUSÍŠ v odpovědi přehledně vypsat VŠECHNY nalezené kategorie a v každé kategorii uvést **VŠECHNA zajímavá nalezená místa**. **U každého místa vypiš až 5 dostupných informací** (např. adresa, kontakt, web, hodnocení). NIKDY žádnou kategorii nevynechávej.
 - **DATY PODLOŽENÁ TVRZENÍ**: Tvým hlavním úkolem je potvrzovat nebo vyvracet informace pomocí načtených GeoJSON dat. 
   - Pokud data něco potvrzují (např. školka existuje, místo je v záplavové zóně): Napiš "Potvrzeno mým datasetem: [zjištění]".
   - Pokud data něco vyvrací nebo vylučují (např. místo NENÍ v záplavové zóně): Napiš "Prověřeno mým datasetem: [zjištění]".
   - Buď konkrétní (zmiň ulici, vzdálenost, název souboru neříkej, ale popiš typ dat).
+- **SHRNUTÍ (POVINNÉ)**: Na úplný závěr své odpovědi VŽDY přidej sekci '**Shrnutí:**', kde v 1-2 větách shrneš nejdůležitější fakta. **Součástí shrnutí MUSÍ být přísné a kritické hodnocení kvality lokality na stupnici 0-10 (např. "Hodnocení lokality: 3/10"). Buď velmi kritický, nekompromisní a hledej nedostatky.**
 - Souřadnice VŽDY ve formátu "lat, lng".
 
 # MAPOVÉ PŘÍKAZY (POVINNÉ)
 
-## 1. json:location — OBRYSY (VŽDY PRO KAŽDÉ MÍSTO)
-VŽDY když mluvíš o nějakém **městě, obci, vesnici, čtvrti, regionu nebo kraji**, MUSÍŠ pro něj vygenerovat tento blok. 
-Tím se zobrazí jeho OBRYS (geometrie) na mapě. To platí pro VŠECHNA místa, o kterých se právě bavíme (i ta z kontextu).
+## 1. json:location — OBRYSY (STRIKTNĚ POVINNÉ)
+VŽDY když zmíníš JAKÉKOLIV **město, obec, vesnici, čtvrť, region nebo kraj**, MUSÍŠ pro něj vygenerovat tento blok. Bez výjimky a u všech míst.
+Tím se zobrazí jeho OBRYS (geometrie) na mapě. To platí pro VŠECHNA místa, o kterých mluvíš.
 \`\`\`json:location
 {"place":"Název místa, Česká republika","label":"Zobrazený název"}
 \`\`\`
@@ -380,8 +383,8 @@ const GEMINI_EXTRACTION_PROMPT = `Jsi extraktor příkazů pro ZIJE!SE AI. Uživ
 Tvůj úkol:
 1. Extrahuj klíčová slova pro vyhledávání v GeoJSON souborech.
 2. Vyber 0–10 relevantních GeoJSON souborů.
-3. **MANDATORY CONTOURS**: Pro KAŽDÉ místo (město, obec, vesnice, čtvrť, část obce, region), které se v dotazu nebo v aktuální konverzaci vyskytuje jako relevantní lokalita, MUSÍŠ vygenerovat SAMOSTATNÝ \`\`\`json:location\`\`\` blok. Bez něj se na mapě nenakreslí obrys! To platí i pro malé vesnice. Pokud se bavíme o Modřicích a Rajhradu, vygeneruj oba.
-4. **POI SEARCH**: Pokud uživatel hledá služby (školy, lékaře, restaurace atd.), vygeneruj pro KAŽDOU kategorii samostatný \`\`\`json:pois\`\`\` blok.
+3. **MANDATORY CONTOURS**: Pro KAŽDÉ místo (město, obec, vesnice, čtvrť, část obce, region), které se v dotazu nebo v aktuální konverzaci vyskytuje jako relevantní lokalita, MUSÍŠ vygenerovat SAMOSTATNÝ \`\`\`json:location\`\`\` blok. Bez něj se na mapě nenakreslí obrys! To platí i pro malé vesnice. Pokud se bavíme o Modřicích a Rajhradu, vygeneruj oba. Dělej to u KAŽDÉHO výstupu.
+4. **POI SEARCH**: Pokud uživatel hledá služby (školy, lékaře, restaurace atd.), vygeneruj pro KAŽDOU kategorii samostatný \`\`\`json:pois\`\`\` blok. V odpovědi pak vypiš VŠECHNA zajímavá nalezená místa.
 
 STRUKTURA ODPOVĚDI (DODRŽUJ PŘESNĚ):
 \`\`\`json:extraction
@@ -548,7 +551,8 @@ async function call_gemini(messages: ChatMessage[], modelOverride?: string) {
                 const errorText = await response.text().catch(() => '');
                 const status = response.status;
 
-                if ((status === 429 || status === 503) && i < models.length - 1) {
+                // Fallback on rate limit (429), service unavailable (503), or gateway timeout (504)
+                if ((status === 429 || status === 503 || status === 504) && i < models.length - 1) {
                     console.warn(`[AI] ${currentModel} returned ${status}, falling back to ${models[i + 1]}...`);
                     continue;
                 }
@@ -561,6 +565,13 @@ async function call_gemini(messages: ChatMessage[], modelOverride?: string) {
             if (!reply) throw new Error('Gemini API nevrátilo platnou odpověď.');
 
             return reply;
+        } catch (err: any) {
+            // If it's a fetch error (like ConnectTimeoutError) and we have a fallback, try it
+            if (i < models.length - 1) {
+                console.warn(`[AI] ${currentModel} fetch failed: ${err.message}, falling back to ${models[i + 1]}...`);
+                continue;
+            }
+            throw err;
         } finally {
             clearTimeout(timeout);
         }
@@ -578,8 +589,13 @@ async function nominatimResolve(placeName: string): Promise<{ lat: number; lng: 
     url.searchParams.set('limit', '3');
     url.searchParams.set('countrycodes', 'cz');
     url.searchParams.set('addressdetails', '1');
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
     try {
-        const res = await fetch(url.toString(), { headers: { 'User-Agent': 'ZijeSe/1.0 (contact@zijese.cz)' } });
+        const res = await fetch(url.toString(), {
+            headers: { 'User-Agent': 'ZijeSe/1.0 (contact@zijese.cz)' },
+            signal: controller.signal
+        });
         if (!res.ok) return null;
         const data = await res.json();
         if (!data.length) return null;
@@ -599,6 +615,7 @@ async function nominatimResolve(placeName: string): Promise<{ lat: number; lng: 
         }
         return { lat, lng, radius };
     } catch { return null; }
+    finally { clearTimeout(timeout); }
 }
 
 async function nominatimReverse(lat: number, lng: number): Promise<string | null> {
@@ -607,8 +624,13 @@ async function nominatimReverse(lat: number, lng: number): Promise<string | null
     url.searchParams.set('lon', String(lng));
     url.searchParams.set('format', 'json');
     url.searchParams.set('accept-language', 'cs');
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
     try {
-        const res = await fetch(url.toString(), { headers: { 'User-Agent': 'ZijeSe/1.0 (contact@zijese.cz)' } });
+        const res = await fetch(url.toString(), {
+            headers: { 'User-Agent': 'ZijeSe/1.0 (contact@zijese.cz)' },
+            signal: controller.signal
+        });
         if (!res.ok) return null;
         const data = await res.json();
 
@@ -621,6 +643,7 @@ async function nominatimReverse(lat: number, lng: number): Promise<string | null
         }
         return data.display_name || null;
     } catch { return null; }
+    finally { clearTimeout(timeout); }
 }
 
 const GOOGLE_PLACES_WHITELIST = new Set([
@@ -635,7 +658,7 @@ const GOOGLE_PLACES_WHITELIST = new Set([
 
 async function fetchPlacesForPoi(apiKey: string, poiReq: any): Promise<any[]> {
     const PLACES_BASE = 'https://places.googleapis.com/v1/places';
-    const FIELD_MASK = 'places.id,places.displayName,places.location,places.formattedAddress,places.nationalPhoneNumber,places.websiteUri';
+    const FIELD_MASK = 'places.id,places.displayName,places.location,places.formattedAddress,places.nationalPhoneNumber,places.websiteUri,places.rating';
 
     let lat: number | null = poiReq.lat ?? null;
     let lng: number | null = poiReq.lng ?? null;
@@ -736,6 +759,7 @@ async function fetchPlacesForPoi(apiKey: string, poiReq: any): Promise<any[]> {
                         website: p.websiteUri || '',
                         lat: p.location?.latitude,
                         lng: p.location?.longitude,
+                        rating: p.rating || null,
                         _category: validatedType || 'other'
                     });
                 }
@@ -761,14 +785,15 @@ function buildPlacesContextForAI(results: { label: string; places: any[]; found:
             continue;
         }
         lines.push(`### ${group.label} (${group.places.length} míst)`);
-        for (const p of group.places.slice(0, 10)) {
+        for (const p of group.places.slice(0, 20)) {
             const parts: string[] = [`• ${p.name || 'Bez názvu'}`];
-            if (p.address) parts.push(`- ${p.address}`);
-            if (p.phone) parts.push(`| tel: ${p.phone}`);
-            if (p.website) parts.push(`| web: ${p.website}`);
+            if (p.address) parts.push(`- Adresa: ${p.address}`);
+            if (p.phone) parts.push(`| Tel: ${p.phone}`);
+            if (p.website) parts.push(`| Web: ${p.website}`);
+            if (p.rating) parts.push(`| Hodnocení: ${p.rating}⭐`);
             lines.push(parts.join(' '));
         }
-        if (group.places.length > 10) lines.push(`  ... a dalších ${group.places.length - 10} míst.`);
+        if (group.places.length > 20) lines.push(`  ... a dalších ${group.places.length - 20} míst.`);
     }
     return lines.join('\n');
 }
@@ -802,9 +827,10 @@ function extractConversationContext(messages: ChatMessage[]): {
 }
 
 export async function POST(request: NextRequest) {
+    let model = DEFAULT_MODEL;
     try {
         const data: ChatRequest = await request.json();
-        const model = data.model || DEFAULT_MODEL;
+        if (data.model) model = data.model;
         const conversationMessages = data.messages || [];
 
         const lastUserMsg = [...conversationMessages].reverse().find(m => m.role === 'user');
@@ -1081,7 +1107,11 @@ export async function POST(request: NextRequest) {
         let status: number;
 
         if (isConnection) {
-            errorMessage = `Server nedostupný na ${OLLAMA_URL}. Zkontrolujte připojení.`;
+            if (model === 'gemini') {
+                errorMessage = "Nepodařilo se připojit ke Gemini API. Zkontrolujte své internetové připojení nebo API klíč.";
+            } else {
+                errorMessage = `Ollama server je nedostupný na ${OLLAMA_URL}. Spusťte prosím Ollama nebo zkontrolujte připojení.`;
+            }
             status = 503;
         } else if (isTimeout) {
             errorMessage = 'Model neodpověděl včas. Zkuste kratší dotaz nebo menší model.';

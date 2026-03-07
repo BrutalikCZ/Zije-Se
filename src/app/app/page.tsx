@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
-import { ArrowLeft, BotMessageSquare, ListChecks, PanelLeftClose, PanelLeft, Globe, ChevronDown, Settings2, LogOut, User, MapPin, Database, Folder } from "lucide-react";
+import { ArrowLeft, BotMessageSquare, ListChecks, PanelLeftClose, PanelLeft, Globe, ChevronDown, Settings2, LogOut, User, MapPin, Database, Folder, Zap } from "lucide-react";
 import { useLanguage } from "@/components/providers/language-provider";
 import { Logo } from "@/components/logo";
 import { ModeToggle } from "@/components/mode-toggle";
@@ -196,62 +196,101 @@ export default function AppPage() {
     const [aiLocationData, setAiLocationData] = useState<GeoJSON.FeatureCollection | null>(null);
 
     const [questionnaireHeatmapData, setQuestionnaireHeatmapData] = useState<GeoJSON.FeatureCollection | null>(null);
+    const [showQuestionnaireHeatmap, setShowQuestionnaireHeatmap] = useState(true);
     const [tileMatchScore, setTileMatchScore] = useState<number | null>(null);
 
 
-    // Compute centroid of a polygon (simple average of coordinates)
+    // Compute centroid of a polygon or multipolygon (simple average or from properties)
     const getPolygonCentroid = useCallback((feature: GeoJSON.Feature): [number, number] | null => {
+        // Prefer explicit coordinates if available in properties
+        if (feature.properties?._lng !== undefined && feature.properties?._lat !== undefined) {
+            return [feature.properties._lng, feature.properties._lat];
+        }
+
         try {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const geom = feature.geometry as any;
-            if (!geom || !geom.coordinates) return null;
-            const coords = geom.coordinates[0] as [number, number][];
-            if (!coords || coords.length === 0) return null;
-            let sumLng = 0, sumLat = 0;
-            // Exclude the closing vertex (same as first)
-            const len = coords.length - 1;
-            for (let i = 0; i < len; i++) {
-                sumLng += coords[i][0];
-                sumLat += coords[i][1];
+            const geom = feature.geometry;
+            if (!geom) return null;
+
+            if (geom.type === 'Point') {
+                return geom.coordinates as [number, number];
             }
-            return [sumLng / len, sumLat / len];
-        } catch {
+
+            if (geom.type === 'Polygon') {
+                const coords = geom.coordinates[0] as [number, number][];
+                if (!coords || coords.length === 0) return null;
+                let sumLng = 0, sumLat = 0;
+                const len = coords.length - 1; // skip closing point
+                for (let i = 0; i < len; i++) {
+                    sumLng += coords[i][0];
+                    sumLat += coords[i][1];
+                }
+                return [sumLng / len, sumLat / len];
+            }
+
+            if (geom.type === 'MultiPolygon') {
+                // Return centroid of the first polygon for simplicity
+                const coords = geom.coordinates[0][0] as [number, number][];
+                if (!coords || coords.length === 0) return null;
+                let sumLng = 0, sumLat = 0;
+                const len = coords.length - 1;
+                for (let i = 0; i < len; i++) {
+                    sumLng += coords[i][0];
+                    sumLat += coords[i][1];
+                }
+                return [sumLng / len, sumLat / len];
+            }
+
+            return null;
+        } catch (e) {
+            console.warn("Centroid calc error:", e);
             return null;
         }
     }, []);
 
     const handleTileClick = useCallback((clickedFeature: GeoJSON.Feature) => {
-        if (!heatmapData) return;
+        // Use questionnaire data if visible, otherwise standard heatmap data
+        const sourceData = (showQuestionnaireHeatmap && questionnaireHeatmapData)
+            ? questionnaireHeatmapData
+            : heatmapData;
+
+        if (!sourceData) return;
 
         const clickedCenter = getPolygonCentroid(clickedFeature);
         if (!clickedCenter) return;
 
-        // Compute distances from clicked tile to all tiles
-        const withDistances = (heatmapData || questionnaireHeatmapData).features
+        // Compute distances from clicked tile to all tiles in current source
+        const withDistances = sourceData.features
             .map(f => {
                 const center = getPolygonCentroid(f);
                 if (!center) return null;
                 const dLng = center[0] - clickedCenter[0];
                 const dLat = center[1] - clickedCenter[1];
-                const dist = dLng * dLng + dLat * dLat; // squared euclidean is fine for sorting
+                const dist = dLng * dLng + dLat * dLat;
                 return { feature: f, dist };
             })
             .filter(Boolean) as { feature: GeoJSON.Feature; dist: number }[];
 
-        // Sort by distance, take the 100 closest (excluding distance=0 which is the clicked tile itself)
+        // Sort by distance, take the 101 closest items
         withDistances.sort((a, b) => a.dist - b.dist);
-        const nearest = withDistances.slice(0, 101); // include clicked tile + 100 nearest
+        const nearest = withDistances.slice(0, 101);
 
         setHighlightedTilesData({
             type: 'FeatureCollection',
             features: nearest.map(n => n.feature)
         });
-    }, [heatmapData, getPolygonCentroid]);
+
+        return nearest.map(n => n.feature);
+    }, [heatmapData, questionnaireHeatmapData, showQuestionnaireHeatmap, getPolygonCentroid]);
 
     const handleQuestionnaireTileClick = useCallback((clickedFeature: GeoJSON.Feature) => {
-        const score = clickedFeature.properties?.matchPercent;
-        setTileMatchScore(typeof score === 'number' ? Math.round(score) : null);
-        handleTileClick(clickedFeature);
+        const nearest = handleTileClick(clickedFeature);
+        if (nearest && nearest.length > 0) {
+            const sum = nearest.reduce((acc, f) => acc + (f.properties?.matchPercent || 0), 0);
+            const avg = sum / nearest.length;
+            setTileMatchScore(Math.round(avg));
+        } else {
+            setTileMatchScore(null);
+        }
     }, [handleTileClick]);
 
     useEffect(() => {
@@ -398,10 +437,18 @@ export default function AppPage() {
         console.log("Vygenerováno dlaždic k zobrazení:", result.features.length);
 
         setQuestionnaireHeatmapData(result);
+        setShowQuestionnaireHeatmap(true);
 
         // Vypneme per-category heatmapy ať neruší
         setActiveHeatmaps({});
     };
+
+    // Vypočítat heatmapu automaticky při načtení, pokud uživatel má data
+    useEffect(() => {
+        if (user?.questionnaireData && !questionnaireHeatmapData && Object.keys(user.questionnaireData).length > 0) {
+            handleQuestionnaireEvaluated(user.questionnaireData as any);
+        }
+    }, [user?.questionnaireData, questionnaireHeatmapData, handleQuestionnaireEvaluated]);
 
 
 
@@ -793,8 +840,7 @@ export default function AppPage() {
                     setIsCollapsed={setIsCollapsed}
                     onEvaluated={handleQuestionnaireEvaluated}
                     onLoginClick={openAuthPanel}
-                    onRemoveHeatmap={() => setQuestionnaireHeatmapData(null)}
-                    hasHeatmap={questionnaireHeatmapData !== null}
+                    isHeatmapActive={showQuestionnaireHeatmap && questionnaireHeatmapData !== null}
                 />
                 <AuthPanel
                     isOpen={isAuthOpen}
@@ -889,7 +935,7 @@ export default function AppPage() {
                             />
                         )
                     ))}
-                    {questionnaireHeatmapData && (
+                    {questionnaireHeatmapData && showQuestionnaireHeatmap && (
                         <MapFillLayer
                             id="questionnaire-heatmap"
                             data={questionnaireHeatmapData}
@@ -900,7 +946,7 @@ export default function AppPage() {
                             onClick={handleQuestionnaireTileClick}
                         />
                     )}
-                    {highlightedTilesData && (
+                    {highlightedTilesData && showQuestionnaireHeatmap && (
                         <MapFillLayer
                             id="highlighted-nearest"
                             data={highlightedTilesData}
@@ -1029,13 +1075,70 @@ export default function AppPage() {
                         />
                     )}
                 </Map>
-                {tileMatchScore !== null && (
-                    <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#0b0b0b]/90 dark:bg-[#f3f3f3]/90 backdrop-blur-md border border-white/10 dark:border-black/10 shadow-xl text-white dark:text-black">
-                        <span className="text-xs opacity-60 font-medium">{language === 'cs' ? 'Shoda' : 'Match'}</span>
-                        <span className="text-lg font-black tabular-nums">{tileMatchScore}%</span>
-                        <button onClick={() => setTileMatchScore(null)} className="cursor-pointer opacity-40 hover:opacity-100 transition-opacity ml-1 text-sm">✕</button>
-                    </div>
-                )}
+
+                {/* Heatmap Toggle Button & Legend - "Vedle sidebaru dolů" */}
+                <div className="absolute bottom-6 left-6 z-30 flex flex-col items-start gap-3">
+                    {/* Match Score Indicator */}
+                    {tileMatchScore !== null && (
+                        <div className="px-3 py-2 rounded-2xl bg-[#0b0b0b]/90 dark:bg-[#f3f3f3]/90 backdrop-blur-md border border-white/10 dark:border-black/10 shadow-xl flex items-center justify-between text-white dark:text-black w-32 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-black opacity-40 uppercase tracking-tighter">{language === 'cs' ? 'SHODA' : 'MATCH'}</span>
+                                <span className="text-sm font-black tabular-nums">{tileMatchScore}%</span>
+                            </div>
+                            <button onClick={() => setTileMatchScore(null)} className="cursor-pointer opacity-40 hover:opacity-100 transition-opacity ml-1 text-xs">✕</button>
+                        </div>
+                    )}
+
+                    <button
+                        onClick={() => {
+                            const newState = !showQuestionnaireHeatmap;
+                            setShowQuestionnaireHeatmap(newState);
+                            if (!newState) {
+                                setHighlightedTilesData(null);
+                                setTileMatchScore(null);
+                            }
+                        }}
+                        disabled={!user?.questionnaireData || Object.keys(user.questionnaireData).length === 0}
+                        className={`group relative flex items-center justify-center w-12 h-12 rounded-full border backdrop-blur-md transition-all duration-300 transform-gpu active:translate-y-px shadow-lg ${(!user?.questionnaireData || Object.keys(user.questionnaireData).length === 0)
+                            ? 'bg-[#1a1a1a]/80 dark:bg-[#ececeb]/80 border-white/10 dark:border-black/10 text-white/20 dark:text-black/20 cursor-not-allowed opacity-50'
+                            : showQuestionnaireHeatmap
+                                ? 'bg-[#3388ff] border-white/20 text-white cursor-pointer hover:bg-[#2563eb] hover:scale-105'
+                                : 'bg-[#1a1a1a]/80 dark:bg-[#ececeb]/80 border-white/10 dark:border-black/10 text-white/60 dark:text-black/60 cursor-pointer hover:bg-[#262626] dark:hover:bg-[#dcdcdc]'
+                            }`}
+                        title={language === 'cs' ? 'Přepnout osobní heatmapu' : 'Toggle personal heatmap'}
+                    >
+                        <Zap size={22} className={showQuestionnaireHeatmap ? 'fill-current' : ''} />
+
+                        {/* Tooltip on hover */}
+                        <div className="absolute left-full ml-3 px-2 py-1 rounded bg-[#0b0b0b] text-white text-[10px] font-bold opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap transition-opacity border border-white/10">
+                            {language === 'cs' ? 'OSOBNÍ HEATMAPA' : 'PERSONAL HEATMAP'}
+                        </div>
+                    </button>
+
+                    {/* Heatmap Legend */}
+                    {showQuestionnaireHeatmap && questionnaireHeatmapData && (
+                        <div className="px-3 py-2 rounded-2xl bg-[#0b0b0b]/90 dark:bg-[#f3f3f3]/90 backdrop-blur-md border border-white/10 dark:border-black/10 shadow-xl flex flex-col gap-1.5 w-32 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            <div className="flex items-center justify-between text-[9px] font-black opacity-40 uppercase tracking-tighter">
+                                <span>{language === 'cs' ? 'CELKOVÁ' : 'TOTAL'}</span>
+                                <span>%</span>
+                            </div>
+                            <div className="h-1.5 w-full rounded-full overflow-hidden flex bg-white/5 dark:bg-black/5">
+                                <div className="flex-1 bg-[#8B0000]" />
+                                <div className="flex-1 bg-[#FF6B6B]" />
+                                <div className="flex-1 bg-[#ff8000]" />
+                                <div className="flex-1 bg-[#FFD700]" />
+                                <div className="flex-1 bg-[#90EE90]" />
+                                <div className="flex-1 bg-[#228B22]" />
+                                <div className="flex-1 bg-[#4FC3F7]" />
+                            </div>
+                            <div className="flex justify-between text-[8px] font-bold opacity-30 px-0.5 tabular-nums">
+                                <span>0</span>
+                                <span>50</span>
+                                <span>100</span>
+                            </div>
+                        </div>
+                    )}
+                </div>
                 <FeatureInfoPanel
                     isOpen={isFeatureInfoOpen}
                     onClose={() => setIsFeatureInfoOpen(false)}
