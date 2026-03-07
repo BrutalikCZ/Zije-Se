@@ -100,14 +100,36 @@ function renderInline(text: string): React.ReactNode[] {
 
 function renderMarkdown(text: string): React.ReactNode {
     return text.split('\n').map((line, i) => {
+        // Headers parsing (# Header, ## Header, ### Header)
+        const headerMatch = line.match(/^(#{1,3})\s+(.*)$/);
+        if (headerMatch) {
+            const level = headerMatch[1].length;
+            const content = headerMatch[2];
+            const inline = renderInline(content);
+
+            // Larger font sizes for headers
+            const sizeClass = level === 1
+                ? "text-lg font-black mb-2 mt-4 underline decoration-[#3388ff]/30 underline-offset-4"
+                : level === 2
+                    ? "text-base font-bold mb-1 mt-3"
+                    : "text-[15px] font-black mb-1 mt-3 text-[#3388ff] uppercase tracking-tight";
+
+            return <div key={i} className={sizeClass}>{inline}</div>;
+        }
+
         const isBullet = /^(\*|•|-)\s+/.test(line);
         const content = isBullet ? line.replace(/^(\*|•|-)\s+/, '') : line;
         const inline = renderInline(content);
 
         if (isBullet) {
-            return <div key={i} className="flex items-center gap-2"><span className="w-2 h-[1.5px] rounded-full bg-current shrink-0 opacity-60" /><span>{inline}</span></div>;
+            return (
+                <div key={i} className="flex items-start gap-2 mb-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#3388ff] shrink-0 mt-1.5 opacity-80" />
+                    <span className="flex-1">{inline}</span>
+                </div>
+            );
         }
-        return <div key={i} className={line === '' ? 'h-2' : ''}>{inline}</div>;
+        return <div key={i} className={line === '' ? 'h-2' : 'mb-0.5'}>{inline}</div>;
     });
 }
 
@@ -407,10 +429,7 @@ export function AIChatPanel({ isOpen, onClose, isCollapsed, setIsCollapsed, onOp
             let traceLine: string | null = null;
             const searchMeta: { label: string; count: number; found: boolean }[] | null = finalData.searchMeta ?? null;
             if (searchMeta && searchMeta.length > 0) {
-                const parts = searchMeta.map(m =>
-                    m.found ? `${m.label} → ${m.count} výsledků` : `${m.label} → nenalezeno`
-                );
-                traceLine = `🔍 ${parts.join(' | ')}`;
+                // traceLine = `🔍 ${parts.join(' | ')}`; (removed as per user request)
             } else if (poisSummary && aiModel !== 'gemini') {
                 traceLine = poisSummary;
             }

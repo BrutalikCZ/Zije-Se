@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
     url.searchParams.set('q', place);
     url.searchParams.set('format', 'geojson');
     url.searchParams.set('polygon_geojson', '1');
-    url.searchParams.set('limit', '1');
+    url.searchParams.set('limit', '5'); // Fetch more to find polygon
     url.searchParams.set('countrycodes', 'cz');
 
     try {
@@ -33,7 +33,16 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: 'Place not found' }, { status: 404 });
         }
 
-        return NextResponse.json(data as GeoJSON.FeatureCollection);
+        // Prioritize features with Polygon or MultiPolygon geometry
+        const bestFeature = data.features.find((f: any) =>
+            f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon'
+        ) || data.features[0];
+
+        // Return a FeatureCollection with only the best feature
+        return NextResponse.json({
+            type: 'FeatureCollection',
+            features: [bestFeature]
+        });
     } catch (error: any) {
         console.error('[Nominatim] Error:', error);
         return NextResponse.json({ error: error.message || 'Internal error' }, { status: 500 });

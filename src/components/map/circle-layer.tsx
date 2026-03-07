@@ -43,16 +43,25 @@ export function MapCircleLayer({
             }
 
             if (!map.getLayer(layerId)) {
+                // Use the provided color or a data-driven expression if color starts with 'expression:'
+                const circleColor = (typeof color === 'string' && color.startsWith('expression:'))
+                    ? JSON.parse(color.substring(11))
+                    : color;
+
+                const strokeColor = (typeof outlineColor === 'string' && outlineColor.startsWith('expression:'))
+                    ? JSON.parse(outlineColor.substring(11))
+                    : outlineColor;
+
                 map.addLayer({
                     id: layerId,
                     type: "circle",
                     source: sourceId,
                     paint: {
-                        "circle-color": color,
+                        "circle-color": circleColor,
                         "circle-radius": radius,
                         "circle-opacity": opacity,
                         "circle-stroke-width": 2,
-                        "circle-stroke-color": outlineColor,
+                        "circle-stroke-color": strokeColor,
                     },
                 });
             }
